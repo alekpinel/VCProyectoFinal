@@ -1,1 +1,2 @@
-Hola esto es error de concurrencia
+Hola esto ya está bien
+www  jj
