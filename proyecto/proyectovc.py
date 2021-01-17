@@ -73,13 +73,23 @@ def LoadData(testpercent = 0.2, target_size=(256, 256)):
     testimages = listimages[int(len(listimages)*(1 - testpercent)):]
     
     trainmasks = listmasks[:int(len(listmasks)*(1 - testpercent))]
-    testmasks = listmasks[:int(len(listmasks)*(1 - testpercent))]
+    testmasks = listmasks[int(len(listmasks)*(1 - testpercent)):]
     
-    return trainimages, trainmasks, testimages, testmasks
+    X_train = np.stack(trainimages)
+    Y_train = np.stack(trainmasks)
+    X_test = np.stack(testimages)
+    Y_test = np.stack(testmasks)
+    
+    return X_train, Y_train, X_test, Y_test
 
 
 def main():
-    trainimages, trainmasks, testimages, testmasks = LoadData()
+    X_train, Y_train, X_test, Y_test = LoadData()
+    
+    print(X_train.shape)
+    print(Y_train.shape)
+    print(X_test.shape)
+    print(Y_test.shape)
     
 
 if __name__ == '__main__':
