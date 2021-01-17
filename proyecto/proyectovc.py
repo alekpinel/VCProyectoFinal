@@ -45,11 +45,6 @@ def LoadData(testpercent = 0.2, target_size=(256, 256)):
     for imagename in tqdm(names):
         listimages.append(LoadImage(imagespath + imagename))
         listmasks.append(LoadImage(maskspath + imagename, False))
-        
-    # min1 = min([i.shape[0] for i in listimages])
-    # min2 = min([i.shape[1] for i in listimages])
-    # newsize = (min1, min2)
-    # print(f"minimum dimensions: {min1} {min2}")
     
     listimages = [cv2.resize(img, target_size[::-1]) for img in listimages]
     listmasks = [cv2.resize(img, target_size[::-1]) for img in listmasks]
@@ -73,6 +68,43 @@ def LoadData(testpercent = 0.2, target_size=(256, 256)):
     
     return X_train, Y_train, X_test, Y_test
 
+#Show the percent of each class
+def ClassPertentage(masks):
+    unique, counts = np.unique(masks, return_counts=True)
+    total = sum(counts)
+    percents = [x/total*100 for x in counts]
+    data = [("Background", percents[0], 'blue'), ("Blood cells", percents[1], 'red'), 
+            ("Bacteries", percents[2], 'green')]
+    print(f"Percent of pixels of each class:\nBackground: {percents[0]}\nBlood cells: {percents[1]}\nBacteries {percents[2]}")
+    
+    PlotBars(data, "Class Percentages", "Percent")
+
+#Plot bars. Data must be ("title", value) or ("title", value, color)
+def PlotBars(data, title=None, y_label=None):
+    strings = [i[0] for i in data]
+    x = [i for i in range(len(data))]
+    y = [i[1] for i in data]
+    
+    colors=None
+    if (len(data[0]) > 2):
+        colors = [i[2] for i in data]
+    
+    fig, ax = plt.subplots()
+    
+    if (title is not None):
+        ax.set_title(title)
+    if (y_label is not None):
+        ax.set_ylabel(y_label)
+    
+    # fig.autofmt_xdate()
+    x_labels=strings
+    plt.xticks(x, x_labels)
+    
+    if (colors is not None):
+        plt.bar(x, y, color=colors)
+    else:
+        plt.bar(x, y)
+    plt.show()
 
 def main():
     X_train, Y_train, X_test, Y_test = LoadData()
@@ -81,6 +113,8 @@ def main():
     print(Y_train.shape)
     print(X_test.shape)
     print(Y_test.shape)
+    
+    ClassPertentage(Y_train)
     
 
 if __name__ == '__main__':
