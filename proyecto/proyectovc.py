@@ -31,17 +31,8 @@ def ShowImage(img, title=None):
         plt.title(title)
     plt.xticks([]),plt.yticks([])
     plt.show()
-    
-def CropRandom(img, new_size):
-    img_size = img.shape[:2]
-    print(f"old size: {img_size}, new size {new_size}")
-    new_img = img[0:new_size[0], 0:new_size[1]]
-    new_img = cv2.resize(img, new_size[::-1])
-    ShowImage(img)
-    ShowImage(new_img)
-    return new_img
-    
 
+#Load the data from the datapath directory and resize all the images
 def LoadData(testpercent = 0.2, target_size=(256, 256)):
     imagespath = datapath + "/images/"
     maskspath = datapath + "/masks/"
