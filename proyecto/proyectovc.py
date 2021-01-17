@@ -31,24 +31,44 @@ def ShowImage(img, title=None):
         plt.title(title)
     plt.xticks([]),plt.yticks([])
     plt.show()
+    
+def CropRandom(img, new_size):
+    img_size = img.shape[:2]
+    print(f"old size: {img_size}, new size {new_size}")
+    new_img = img[0:new_size[0], 0:new_size[1]]
+    new_img = cv2.resize(img, new_size[::-1])
+    ShowImage(img)
+    ShowImage(new_img)
+    return new_img
+    
 
-def LoadData(testpercent = 0.2):
+def LoadData(testpercent = 0.2, target_size=(256, 256)):
     imagespath = datapath + "/images/"
     maskspath = datapath + "/masks/"
     
     names = os.listdir(imagespath)
     
+    #Load data into lists
     listimages = []
     listmasks = []
     for imagename in tqdm(names):
         listimages.append(LoadImage(imagespath + imagename))
         listmasks.append(LoadImage(maskspath + imagename, False))
+        
+    # min1 = min([i.shape[0] for i in listimages])
+    # min2 = min([i.shape[1] for i in listimages])
+    # newsize = (min1, min2)
+    # print(f"minimum dimensions: {min1} {min2}")
+    
+    listimages = [cv2.resize(img, target_size[::-1]) for img in listimages]
+    listmasks = [cv2.resize(img, target_size[::-1]) for img in listmasks]
     
     #Randomize the order
     zipped = list(zip(listimages, listmasks))
     random.shuffle(zipped)
     listimages, listmasks = zip(*zipped)
     
+    #Split training and test
     trainimages = listimages[:int(len(listimages)*(1 - testpercent))]
     testimages = listimages[int(len(listimages)*(1 - testpercent)):]
     
