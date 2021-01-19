@@ -13,6 +13,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import random
+from keras.applications.resnet import ResNet50
+from keras.utils import plot_model
+
+from keras.models import Sequential, Model
+from keras.layers import Dense, Dropout, Flatten
+from keras.layers import Conv2D, MaxPooling2D, Activation, AveragePooling2D
+from keras.layers import Add, Concatenate
+from keras.layers import UpSampling2D, Conv2DTranspose
+from keras.layers.normalization import BatchNormalization
 
 #Function that load and image and convert it to RGB if needed
 def LoadImage(filename, color = True):
@@ -106,15 +115,76 @@ def PlotBars(data, title=None, y_label=None):
         plt.bar(x, y)
     plt.show()
 
+#This models a decoder block
+def DecoderBlock(backbone, filters, x, skip):
+    
+    x = UpSampling2D(size=2)(x)
+    # print(skip.output_shape)
+    x = Concatenate()([x, skip])
+    
+    x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
+    x = BatchNormalization()(x)
+    
+    x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
+    x = BatchNormalization()(x)
+    
+    return x
+    
+
+def UNet(input_shape=(256, 256, 3)):
+    backbone = ResNet50(input_shape = input_shape, include_top = False, weights = 'imagenet', pooling = 'avg')
+    # print(backbone.summary())
+    # plot_model(backbone)
+    
+    model_input = backbone.input
+    
+    
+    
+    #We eliminate the last average pooling
+    x = backbone.layers[-2].output
+    
+    
+    # x = AveragePooling2D((2, 2))(x)
+    # x = Conv2D(4096, (3, 3), activation='relu', padding='same')(x)
+    
+    # for i in range(len(backbone.layers)):
+    #     if (isinstance(backbone.layers[i], MaxPooling2D)):
+    #         print(f"nombre de la capa {i}, {backbone.layers[i].name}")
+    
+    #Layers were we are going to do skip connections.
+    feature_layers = [142, 80, 38, 5]
+    filters = [1024, 512, 256, 64]
+    
+    for i in range(len(feature_layers)):
+        print(i)
+        skip = backbone.layers[i].output
+        x = DecoderBlock(backbone, filters[i], x, skip)
+    
+    
+    # skip = backbone.layers[142].output
+    # x = DecoderBlock(backbone, 1024, x, skip)
+    
+    
+    
+    model_output = x
+    model = Model(model_input, model_output)
+    
+    print(model.summary())
+    
+    
+    
+
 def main():
-    X_train, Y_train, X_test, Y_test = LoadData()
+    # X_train, Y_train, X_test, Y_test = LoadData()
     
-    print(X_train.shape)
-    print(Y_train.shape)
-    print(X_test.shape)
-    print(Y_test.shape)
+    # print(X_train.shape)
+    # print(Y_train.shape)
+    # print(X_test.shape)
+    # print(Y_test.shape)
     
-    ClassPertentage(Y_train)
+    # ClassPertentage(Y_train)
+    
+    UNet()
     
 
 if __name__ == '__main__':
