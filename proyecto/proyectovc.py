@@ -132,7 +132,7 @@ def PlotBars(data, title=None, y_label=None):
 
 
     
-
+#UNet from a ResNet
 def UNetFromResNet(input_shape=(256, 256, 3), n_classes=3):
     #This models a decoder block
     def DecoderBlock(filters, x, skip):
@@ -150,25 +150,11 @@ def UNetFromResNet(input_shape=(256, 256, 3), n_classes=3):
         return x
     
     backbone = ResNet50(input_shape = input_shape, include_top = False, weights = 'imagenet', pooling = 'avg')
-    # print(backbone.summary())
-    # plot_model(backbone)
-    
     model_input = backbone.input
-    
-    
     
     #We eliminate the last average pooling
     x = backbone.layers[-2].output
     
-    
-    # x = AveragePooling2D((2, 2))(x)
-    # x = Conv2D(4096, (3, 3), activation='relu', padding='same')(x)
-    
-    # for i in range(len(backbone.layers)):
-    #     if (isinstance(backbone.layers[i], MaxPooling2D)):
-    #         print(f"nombre de la capa {i}, {backbone.layers[i].name}")
-    
-    # print(backbone.summary())
     
     #Layers were we are going to do skip connections.
     feature_layers = [142, 80, 38, 4, 0]
@@ -178,17 +164,11 @@ def UNetFromResNet(input_shape=(256, 256, 3), n_classes=3):
         skip = backbone.layers[feature_layers[i]].output
         x = DecoderBlock(filters[i], x, skip)
     
-    
-    # skip = backbone.layers[142].output
-    # x = DecoderBlock(backbone, 1024, x, skip)
-    
     #Final Convolution
     x = Conv2D(n_classes, (3, 3), activation='sigmoid', padding='same')(x)
     
     model_output = x
     model = Model(model_input, model_output)
-    
-    # print(model.summary())
     
     return model
 
