@@ -18,7 +18,7 @@ from keras.applications.resnet import ResNet50
 from keras.utils import plot_model, to_categorical
 
 from keras.models import Sequential, Model
-from keras.layers import Dense, Dropout, Flatten
+from keras.layers import Dense, Dropout, Flatten, Input
 from keras.layers import Conv2D, MaxPooling2D, Activation, AveragePooling2D
 from keras.layers import Add, Concatenate
 from keras.layers import UpSampling2D, Conv2DTranspose
@@ -130,43 +130,31 @@ def PlotBars(data, title=None, y_label=None):
         plt.bar(x, y)
     plt.show()
 
-#This models a decoder block
-def DecoderBlock(filters, x, skip):
-    
-    x = UpSampling2D(size=2)(x)
-    # print(skip.output_shape)
-    x = Concatenate()([x, skip])
-    
-    x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
-    x = BatchNormalization()(x)
-    
-    x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
-    x = BatchNormalization()(x)
-    
-    return x
-    
 
-def UNet(input_shape=(256, 256, 3), n_classes=3):
+    
+#UNet from a ResNet
+def UNetFromResNet(input_shape=(256, 256, 3), n_classes=3):
+    #This models a decoder block
+    def DecoderBlock(filters, x, skip):
+        
+        x = UpSampling2D(size=2)(x)
+        # print(skip.output_shape)
+        x = Concatenate()([x, skip])
+        
+        x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
+        x = BatchNormalization()(x)
+        
+        x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
+        x = BatchNormalization()(x)
+        
+        return x
+    
     backbone = ResNet50(input_shape = input_shape, include_top = False, weights = 'imagenet', pooling = 'avg')
-    # print(backbone.summary())
-    # plot_model(backbone)
-    
     model_input = backbone.input
-    
-    
     
     #We eliminate the last average pooling
     x = backbone.layers[-2].output
     
-    
-    # x = AveragePooling2D((2, 2))(x)
-    # x = Conv2D(4096, (3, 3), activation='relu', padding='same')(x)
-    
-    # for i in range(len(backbone.layers)):
-    #     if (isinstance(backbone.layers[i], MaxPooling2D)):
-    #         print(f"nombre de la capa {i}, {backbone.layers[i].name}")
-    
-    # print(backbone.summary())
     
     #Layers were we are going to do skip connections.
     feature_layers = [142, 80, 38, 4, 0]
@@ -176,20 +164,59 @@ def UNet(input_shape=(256, 256, 3), n_classes=3):
         skip = backbone.layers[feature_layers[i]].output
         x = DecoderBlock(filters[i], x, skip)
     
-    
-    # skip = backbone.layers[142].output
-    # x = DecoderBlock(backbone, 1024, x, skip)
-    
     #Final Convolution
     x = Conv2D(n_classes, (3, 3), activation='sigmoid', padding='same')(x)
     
     model_output = x
     model = Model(model_input, model_output)
     
-    # print(model.summary())
-    
     return model
+
+#Classic implementation of UNet
+def UNetClassic(input_shape=(256, 256, 3), n_classes=3):
+    #Layer of encoder: 2 convs and pooling
+    def EncoderLayer(filters, x):
+        x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
+        x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
+        feature_layer = x
+        x = MaxPooling2D()(x)
+        return x, feature_layer
+    #Layer of decoder, upsampling, conv, concatenation and 2 convs
+    def DecoderLayer(filters, x, skip):
+        x = UpSampling2D(size=(2,2))(x)
+        x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
+        x = Concatenate()([x, skip])
+        x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
+        x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
+        return x
     
+    #Input
+    x = Input(input_shape)
+    model_input = x
+    
+    #Encoder
+    x, encoder1 = EncoderLayer(64,  x)
+    x, encoder2 = EncoderLayer(128, x)
+    x, encoder3 = EncoderLayer(256, x)
+    x, encoder4 = EncoderLayer(512, x)
+    
+    #Centre
+    x = Conv2D(1024, (3, 3), activation='relu', padding='same')(x)
+    
+    #Decoder
+    x = DecoderLayer(512, x, encoder4)
+    x = DecoderLayer(256, x, encoder3)
+    x = DecoderLayer(128, x, encoder2)
+    x = DecoderLayer(64,  x, encoder1)
+    
+    #Output
+    x = Conv2D(n_classes, (3, 3), activation='sigmoid', padding='same')(x)
+    model_output = x
+    
+    model = Model(model_input, model_output)
+    return model
+
+
 # Compile with the optimizer and the loss function
 def Compile(model):
     optimizer = SGD(lr = 0.01, decay = 1e-6, momentum = 0.9, nesterov = True)
@@ -227,7 +254,7 @@ def main():
     
     # ClassPertentage(Y_train)
     
-    unet = TestModel()
+    unet = UNetClassic()
     unet.summary()
     Compile(unet)
     TrainModel(unet, X_train, Y_train, X_test, Y_test, batch_size=1)
