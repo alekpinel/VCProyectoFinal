@@ -7,12 +7,24 @@ Created on Sun Jan 17 11:05:22 2021
 
 datapath = "../data/" #Local
 
+import keras
 import os
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import random
+from keras.applications.resnet import ResNet50
+from keras.utils import plot_model, to_categorical
+
+from keras.models import Sequential, Model
+from keras.layers import Dense, Dropout, Flatten
+from keras.layers import Conv2D, MaxPooling2D, Activation, AveragePooling2D
+from keras.layers import Add, Concatenate
+from keras.layers import UpSampling2D, Conv2DTranspose
+from keras.layers.normalization import BatchNormalization
+
+from keras.optimizers import SGD
 
 #Function that load and image and convert it to RGB if needed
 def LoadImage(filename, color = True):
@@ -66,7 +78,19 @@ def LoadData(testpercent = 0.2, target_size=(256, 256)):
     X_test = np.stack(testimages)
     Y_test = np.stack(testmasks)
     
+    Y_train = ToCategoricalMatrix(Y_train)
+    Y_test = ToCategoricalMatrix(Y_test)
+    
     return X_train, Y_train, X_test, Y_test
+
+def ToCategoricalMatrix(data):
+    originalShape = data.shape
+    totalFeatures = data.max() + 1
+    
+    categorical = data.reshape((-1,))
+    categorical = to_categorical(categorical)
+    data = categorical.reshape(originalShape + (totalFeatures,))
+    return data
 
 #Show the percent of each class
 def ClassPertentage(masks):
@@ -106,6 +130,93 @@ def PlotBars(data, title=None, y_label=None):
         plt.bar(x, y)
     plt.show()
 
+#This models a decoder block
+def DecoderBlock(filters, x, skip):
+    
+    x = UpSampling2D(size=2)(x)
+    # print(skip.output_shape)
+    x = Concatenate()([x, skip])
+    
+    x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
+    x = BatchNormalization()(x)
+    
+    x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
+    x = BatchNormalization()(x)
+    
+    return x
+    
+
+def UNet(input_shape=(256, 256, 3), n_classes=3):
+    backbone = ResNet50(input_shape = input_shape, include_top = False, weights = 'imagenet', pooling = 'avg')
+    # print(backbone.summary())
+    # plot_model(backbone)
+    
+    model_input = backbone.input
+    
+    
+    
+    #We eliminate the last average pooling
+    x = backbone.layers[-2].output
+    
+    
+    # x = AveragePooling2D((2, 2))(x)
+    # x = Conv2D(4096, (3, 3), activation='relu', padding='same')(x)
+    
+    # for i in range(len(backbone.layers)):
+    #     if (isinstance(backbone.layers[i], MaxPooling2D)):
+    #         print(f"nombre de la capa {i}, {backbone.layers[i].name}")
+    
+    # print(backbone.summary())
+    
+    #Layers were we are going to do skip connections.
+    feature_layers = [142, 80, 38, 4, 0]
+    filters = [1024, 512, 256, 64, 32]
+    
+    for i in range(len(feature_layers)):
+        skip = backbone.layers[feature_layers[i]].output
+        x = DecoderBlock(filters[i], x, skip)
+    
+    
+    # skip = backbone.layers[142].output
+    # x = DecoderBlock(backbone, 1024, x, skip)
+    
+    #Final Convolution
+    x = Conv2D(n_classes, (3, 3), activation='sigmoid', padding='same')(x)
+    
+    model_output = x
+    model = Model(model_input, model_output)
+    
+    # print(model.summary())
+    
+    return model
+    
+# Compile with the optimizer and the loss function
+def Compile(model):
+    optimizer = SGD(lr = 0.01, decay = 1e-6, momentum = 0.9, nesterov = True)
+    loss = keras.losses.categorical_crossentropy
+    
+    model.compile(optimizer=optimizer,
+                  loss=loss,
+                  metrics=['accuracy'])
+
+def TrainModel(model, X_train, Y_train, X_val, Y_val, batch_size=128):
+    hist = model.fit(X_train, Y_train,
+                        batch_size=batch_size,
+                        epochs=12,
+                        verbose=1,
+                        validation_data=(X_val, Y_val))
+    return hist
+
+def TestModel(input_shape=(256, 256, 3), n_classes=3):
+    model = Sequential()
+    model.add(Conv2D(32, kernel_size=(3, 3),
+                     activation='relu',
+                     input_shape=input_shape, padding='same'))
+    model.add(Conv2D(n_classes, (3, 3), activation='sigmoid', padding='same'))
+    return model
+    
+    
+
 def main():
     X_train, Y_train, X_test, Y_test = LoadData()
     
@@ -114,7 +225,13 @@ def main():
     print(X_test.shape)
     print(Y_test.shape)
     
-    ClassPertentage(Y_train)
+    # ClassPertentage(Y_train)
+    
+    unet = TestModel()
+    unet.summary()
+    Compile(unet)
+    TrainModel(unet, X_train, Y_train, X_test, Y_test, batch_size=1)
+    
     
 
 if __name__ == '__main__':
