@@ -6,6 +6,8 @@ Created on Sun Jan 17 11:05:22 2021
 """
 
 datapath = "../data/" #Local
+pretrainingdatapath = "../data_pretraining/"
+savedmodelspath = "./saves/"
 
 import keras
 import os
@@ -82,6 +84,33 @@ def LoadData(testpercent = 0.2, target_size=(256, 256)):
     Y_test = ToCategoricalMatrix(Y_test)
     
     return X_train, Y_train, X_test, Y_test
+
+def LoadPretrainingData():
+    trainpath = pretrainingdatapath + "/train/"
+    testpath = pretrainingdatapath + "/test/"
+    
+    def LoadFolder(path):
+        data = []
+        names = os.listdir(path)
+        for imagename in tqdm(names):
+            data.append(LoadImage(path + imagename))
+        return data
+    
+    trainimages = LoadFolder(trainpath + 'images')
+    trainmasks = LoadFolder(trainpath + 'mask')
+    testimages = LoadFolder(testpath + 'images')
+    testmasks = LoadFolder(testpath + 'mask')
+    
+    X_train = np.stack(trainimages)
+    Y_train = np.stack(trainmasks)
+    X_test = np.stack(testimages)
+    Y_test = np.stack(testmasks)
+    
+    Y_train = ToCategoricalMatrix(Y_train)
+    Y_test = ToCategoricalMatrix(Y_test)
+    
+    return X_train, Y_train, X_test, Y_test
+    
 
 def ToCategoricalMatrix(data):
     originalShape = data.shape
@@ -226,7 +255,7 @@ def Compile(model):
                   loss=loss,
                   metrics=['accuracy'])
 
-def TrainModel(model, X_train, Y_train, X_val, Y_val, batch_size=128):
+def Train(model, X_train, Y_train, X_val, Y_val, batch_size=128):
     hist = model.fit(X_train, Y_train,
                         batch_size=batch_size,
                         epochs=12,
@@ -234,14 +263,12 @@ def TrainModel(model, X_train, Y_train, X_val, Y_val, batch_size=128):
                         validation_data=(X_val, Y_val))
     return hist
 
-def TestModel(input_shape=(256, 256, 3), n_classes=3):
-    model = Sequential()
-    model.add(Conv2D(32, kernel_size=(3, 3),
-                     activation='relu',
-                     input_shape=input_shape, padding='same'))
-    model.add(Conv2D(n_classes, (3, 3), activation='sigmoid', padding='same'))
-    return model
-    
+def Test(model, X_test, Y_test):
+    predicciones = model.predict(X_test)
+    labels = np.argmax(Y_test, axis = 1)
+    preds = np.argmax(predicciones, axis = 1)
+    accuracy = sum(labels == preds)#/len(labels)
+    return accuracy
     
 
 def main():
@@ -257,7 +284,14 @@ def main():
     unet = UNetClassic()
     unet.summary()
     Compile(unet)
-    TrainModel(unet, X_train, Y_train, X_test, Y_test, batch_size=1)
+    Train(unet, X_train, Y_train, X_test, Y_test, batch_size=1)
+    
+    # unet.save(savedmodelspath + 'UNet.h5')
+    
+    
+    # model = keras.models.load_model(savedmodelspath + 'UNet.h5')
+    # acc = Test(model, X_test, Y_test)
+    # print(f"Accuracy is: {acc}")
     
     
 
