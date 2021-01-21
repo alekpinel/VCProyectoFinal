@@ -8,6 +8,7 @@ Created on Sun Jan 17 11:05:22 2021
 datapath = "../data/" #Local
 pretrainingdatapath = "../data_pretraining/"
 savedmodelspath = "./saves/"
+pretrainedUNet = savedmodelspath + "PretrainedUNet.h5"
 
 import keras
 import os
@@ -25,11 +26,23 @@ from keras.layers import Conv2D, MaxPooling2D, Activation, AveragePooling2D
 from keras.layers import Add, Concatenate
 from keras.layers import UpSampling2D, Conv2DTranspose
 from keras.layers.normalization import BatchNormalization
+from PIL import Image
 
 from keras.optimizers import SGD
 
 #The local GPU used to run out of memory, so we limited the memory usage:
 os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+
+def ToGray(img):
+    return cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+
+def LoadGif(filename):
+    gif = cv2.VideoCapture(filename)
+    ret,frame = gif.read()
+    img = frame
+    # img = Image.fromarray(frame)
+    # img = img.convert('RGB')
+    return img
 
 #Function that load and image and convert it to RGB if needed
 def LoadImage(filename, color = True):
@@ -51,8 +64,8 @@ def ShowImage(img, title=None):
 
 #Load the data from the datapath directory and resize all the images
 def LoadData(testpercent = 0.2, target_size=(256, 256)):
-    imagespath = datapath + "/images/"
-    maskspath = datapath + "/masks/"
+    imagespath = datapath + "images/"
+    maskspath = datapath + "masks/"
     
     names = os.listdir(imagespath)
     
@@ -64,7 +77,7 @@ def LoadData(testpercent = 0.2, target_size=(256, 256)):
         listmasks.append(LoadImage(maskspath + imagename, False))
     
     listimages = [cv2.resize(img, target_size[::-1]) for img in listimages]
-    listmasks = [cv2.resize(img, target_size[::-1]) for img in listmasks]
+    listmasks  = [cv2.resize(img, target_size[::-1]) for img in listmasks]
     
     #Randomize the order
     zipped = list(zip(listimages, listmasks))
@@ -88,29 +101,44 @@ def LoadData(testpercent = 0.2, target_size=(256, 256)):
     
     return X_train, Y_train, X_test, Y_test
 
-def LoadPretrainingData():
-    trainpath = pretrainingdatapath + "/train/"
-    testpath = pretrainingdatapath + "/test/"
+def LoadPretrainingData(target_size=(256, 256)):
+    trainpath = pretrainingdatapath + "training/"
+    testpath = pretrainingdatapath + "test/"
     
-    def LoadFolder(path):
+    def LoadFolder(path, masks=False):
         data = []
         names = os.listdir(path)
         for imagename in tqdm(names):
-            data.append(LoadImage(path + imagename))
+            if (masks):
+                img = LoadGif(path + imagename)
+                img = ToGray(img)
+                data.append(img)
+            else:
+                data.append(LoadImage(path + imagename, True))
         return data
     
-    trainimages = LoadFolder(trainpath + 'images')
-    trainmasks = LoadFolder(trainpath + 'mask')
-    testimages = LoadFolder(testpath + 'images')
-    testmasks = LoadFolder(testpath + 'mask')
+    trainimages = LoadFolder(trainpath + 'images/')
+    trainmasks = LoadFolder(trainpath + 'mask/', True)
+    testimages = LoadFolder(testpath + 'images/')
+    testmasks = LoadFolder(testpath + 'mask/', True)
+    
+    trainimages = [cv2.resize(img, target_size[::-1]) for img in trainimages]
+    trainmasks = [cv2.resize(img, target_size[::-1]) for img in trainmasks]
+    testimages = [cv2.resize(img, target_size[::-1]) for img in testimages]
+    testmasks = [cv2.resize(img, target_size[::-1]) for img in testmasks]
     
     X_train = np.stack(trainimages)
     Y_train = np.stack(trainmasks)
     X_test = np.stack(testimages)
     Y_test = np.stack(testmasks)
     
-    Y_train = ToCategoricalMatrix(Y_train)
-    Y_test = ToCategoricalMatrix(Y_test)
+    X_train = X_train / 255
+    Y_train = Y_train / 255
+    X_test = X_test / 255
+    Y_test = Y_test / 255
+    
+    # Y_train = ToCategoricalMatrix(Y_train)
+    # Y_test = ToCategoricalMatrix(Y_test)
     
     return X_train, Y_train, X_test, Y_test
     
@@ -250,9 +278,14 @@ def UNetClassic(input_shape=(256, 256, 3), n_classes=3):
 
 
 # Compile with the optimizer and the loss function
-def Compile(model):
+def Compile(model, loss='categorical'):
     optimizer = SGD(lr = 0.01, decay = 1e-6, momentum = 0.9, nesterov = True)
-    loss = keras.losses.categorical_crossentropy
+    
+    if (loss == 'binary'):
+        loss = keras.losses.binary_crossentropy
+    else:
+        loss = keras.losses.categorical_crossentropy
+    
     
     model.compile(optimizer=optimizer,
                   loss=loss,
@@ -273,23 +306,52 @@ def Test(model, X_test, Y_test):
     accuracy = sum(labels == preds)#/len(labels)
     return accuracy
 
+def AdjustModel(model, n_classes):
+    model_input = model.input
+    
+    #We eliminate the last layer
+    x = model.layers[-2].output
+    model_output = Conv2D(n_classes, (3, 3), activation='sigmoid', padding='same')(x)
+    
+    model = Model(model_input, model_output)
+    
+    return model
+    
+def PreTrain(model, pathtosave):
+    X_train, Y_train, X_test, Y_test = LoadPretrainingData()
+    model = AdjustModel(model, 1)
+    Compile(model, loss='binary')
+    Train(model, X_train, Y_train, X_test, Y_test, batch_size=4, epochs=30)
+    model.save(pathtosave)
 
-
+def LoadModel(pathtosave, n_classes):
+    model = keras.models.load_model(pathtosave)
+    model = AdjustModel(model, n_classes)
+    return model
 
 def main():
-    X_train, Y_train, X_test, Y_test = LoadData()
+    # X_train, Y_train, X_test, Y_test = LoadData()
     
-    print(X_train.shape)
-    print(Y_train.shape)
-    print(X_test.shape)
-    print(Y_test.shape)
+    # print(X_train.shape)
+    # print(Y_train.shape)
+    # print(X_test.shape)
+    # print(Y_test.shape)
+    
+    #Pretrain block
+    # unet = UNetClassic()
+    # PreTrain(unet, pretrainedUNet)
+    
+    X_train, Y_train, X_test, Y_test = LoadPretrainingData()
+    model = LoadModel(pretrainedUNet, 1)
+    Compile(model, loss='binary')
+    Train(model, X_train, Y_train, X_test, Y_test, batch_size=4, epochs=30)
     
     # ClassPertentage(Y_train)
     
-    unet = UNetClassic()
-    unet.summary()
-    Compile(unet)
-    Train(unet, X_train, Y_train, X_test, Y_test, batch_size=1, epochs=2)
+    # unet = UNetClassic()
+    # unet.summary()
+    # Compile(unet)
+    # Train(unet, X_train, Y_train, X_test, Y_test, batch_size=1, epochs=5)
     
     # unet.save(savedmodelspath + 'UNet.h5')
     
