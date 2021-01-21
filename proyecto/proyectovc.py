@@ -28,6 +28,9 @@ from keras.layers.normalization import BatchNormalization
 
 from keras.optimizers import SGD
 
+#The local GPU used to run out of memory, so we limited the memory usage:
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+
 #Function that load and image and convert it to RGB if needed
 def LoadImage(filename, color = True):
     if (color):
@@ -255,10 +258,10 @@ def Compile(model):
                   loss=loss,
                   metrics=['accuracy'])
 
-def Train(model, X_train, Y_train, X_val, Y_val, batch_size=128):
+def Train(model, X_train, Y_train, X_val, Y_val, batch_size=128, epochs=12):
     hist = model.fit(X_train, Y_train,
                         batch_size=batch_size,
-                        epochs=12,
+                        epochs=epochs,
                         verbose=1,
                         validation_data=(X_val, Y_val))
     return hist
@@ -269,7 +272,9 @@ def Test(model, X_test, Y_test):
     preds = np.argmax(predicciones, axis = 1)
     accuracy = sum(labels == preds)#/len(labels)
     return accuracy
-    
+
+
+
 
 def main():
     X_train, Y_train, X_test, Y_test = LoadData()
@@ -284,7 +289,7 @@ def main():
     unet = UNetClassic()
     unet.summary()
     Compile(unet)
-    Train(unet, X_train, Y_train, X_test, Y_test, batch_size=1)
+    Train(unet, X_train, Y_train, X_test, Y_test, batch_size=1, epochs=2)
     
     # unet.save(savedmodelspath + 'UNet.h5')
     
