@@ -8,48 +8,20 @@ Created on Tue Jan 19 12:22:51 2021
 
 import numpy as np
 import proyectovc
-import tensorflow as tf
-
-def countClasses(masks):
-    
-    total_counts = {0:0, 1:0, 2:0}
-    
-    for mask in masks:
-        classes = tf.argmax(mask, axis=-1).numpy()
-        class_counts = np.unique(classes, return_counts=True)
-        for c in range(len(class_counts[0])): 
-            total_counts[class_counts[0][c]] += class_counts[1][c]
-        
-    return total_counts
-
-
-def classWeights(class_weights):
-    
-    total = sum(class_weights.values())
-    for key, value in class_weights.items():
-        class_weights[key] =  total/value
-    
-    return class_weights
-
 
 def calculateLossWeights(masks):
-    
+    '''
+    Calculate a loss weight for each class inversely proportional to the
+    occurences of each class
+    '''
     mask_width = masks.shape[2]
     mask_height = masks.shape[1]
-    class_count = countClasses(masks)
-    class_weights = classWeights(class_count)
-    w = [[class_weights[0], class_weights[1], class_weights[2]]] * mask_width
-    h = [w] * mask_height
     
-    return np.array(h)
+    count_per_class = np.sum(masks, axis=(0,1,2))
     
+    # El peso de cada clase es inversamente porporcional a la proporción
+    # en la que aparezca
+    class_weights = np.sum(count_per_class)/count_per_class.astype(np.float64)
     
-    
-''' ASÍ SE USA ESTO'''
-X_train, y_train, X_test, y_test = proyectovc.LoadData()
-
-prueba = calculateLossWeights(y_train)
-
-''' Y luego en model.compile se le mete el parámetro
-loss_weights = prueba, usando la métrica de accuracy normal 
-'''
+    # Replicamos los pesos al tamaño de la máscara original
+    return np.ones((mask_height, mask_width, 3))*class_weights
