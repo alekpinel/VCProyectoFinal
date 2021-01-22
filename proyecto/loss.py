@@ -7,7 +7,6 @@ Created on Tue Jan 19 12:22:51 2021
 """
 
 import numpy as np
-import proyectovc
 
 def calculateLossWeights(masks):
     '''
@@ -25,3 +24,17 @@ def calculateLossWeights(masks):
     
     # Replicamos los pesos al tamaño de la máscara original
     return np.ones((mask_height, mask_width, 3))*class_weights
+
+
+def calculateClassWeights(masks):
+    
+    weights = {}
+    
+    count_per_class = np.sum(masks, axis=(0,1,2))
+    num_classes = len(count_per_class)
+    total = np.sum(count_per_class)
+        
+    for i, c in enumerate(count_per_class):
+        weights[i] = total/(num_classes * c)
+        
+    return weights
