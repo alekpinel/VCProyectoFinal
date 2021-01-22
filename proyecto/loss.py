@@ -22,5 +22,7 @@ def calculateLossWeights(masks):
     # en la que aparezca
     class_weights = np.sum(count_per_class)/count_per_class.astype(np.float64)
     
+    print(class_weights)
+    
     # Replicamos los pesos al tamaño de la máscara original
     return np.ones((mask_height, mask_width, 3))*class_weights

@@ -301,9 +301,9 @@ def UNetClassic(input_shape=(256, 256, 3), n_classes=3):
     
     #Output
     if (n_classes == 1):
-        x = Conv2D(n_classes, (3, 3), activation='sigmoid', padding='same')(x)
+        x = Conv2D(n_classes, (1, 1), activation='softmax', padding='same')(x)
     else:
-        x = Conv2D(n_classes, (3, 3), activation='softmax', padding='same')(x)
+        x = Conv2D(n_classes, (1, 1), activation='softmax', padding='same')(x)
         
     model_output = x
     
@@ -323,9 +323,10 @@ def Compile(model, loss='weighted_categorical', weight_loss=None):
     if (loss == 'weighted_categorical'):
         loss_final = keras.losses.categorical_crossentropy
         model.compile(optimizer='adam',
-                  loss=loss_final,
+                  loss='categorical_crossentropy',
                   metrics=['accuracy'],
-                  loss_weights=weight_loss)
+                  loss_weights=weight_loss
+                  )
     return model
 
 def Train(model, X_train, Y_train, X_val, Y_val, batch_size=128, epochs=12):
@@ -338,9 +339,17 @@ def Train(model, X_train, Y_train, X_val, Y_val, batch_size=128, epochs=12):
 
 def Test(model, X_test, Y_test):
     predicciones = model.predict(X_test)
-    labels = np.argmax(Y_test, axis = 1)
-    preds = np.argmax(predicciones, axis = 1)
-    accuracy = sum(labels == preds)#/len(labels)
+    labels = np.argmax(Y_test, axis = -1)
+    preds = np.argmax(predicciones, axis = -1)
+    
+    accuracy = sum(labels.reshape((-1,)) == preds.reshape((-1,)))/len(labels.reshape((-1,)))
+    
+    print(f"Accuracy={accuracy}")
+    
+    for i in range(len(X_test)):
+        visualize(X_test[i], Y_test[i])
+        visualize(X_test[i], preds[i])
+        
     return accuracy
 
 def AdjustModel(model, n_classes):
@@ -350,9 +359,9 @@ def AdjustModel(model, n_classes):
     x = model.layers[-2].output
     
     if (n_classes == 1):
-        model_output = Conv2D(n_classes, (3, 3), activation='sigmoid', padding='same')(x)
+        model_output = Conv2D(n_classes, (1, 1), activation='sigmoid', padding='same')(x)
     else:
-        model_output = Conv2D(n_classes, (3, 3), activation='softmax', padding='same')(x)
+        model_output = Conv2D(n_classes, (1, 1), activation='softmax', padding='same')(x)
     
     model = Model(model_input, model_output)
     
@@ -368,6 +377,18 @@ def PreTrain(model, pathtosave):
 def LoadModel(pathtosave, n_classes):
     model = keras.models.load_model(pathtosave)
     model = AdjustModel(model, n_classes)
+    return model
+
+def ToyModel(input_shape=(256, 256, 3), n_classes=3):
+    #Input
+    x = Input(input_shape)
+    model_input = x
+    
+    x = Conv2D(64, (3, 3), activation='relu', padding='same')(x)
+    
+    x = Conv2D(n_classes, (1, 1), activation='softmax', padding='same')(x)
+    model_output = x
+    model = Model(model_input, model_output)
     return model
 
 def main():
@@ -388,15 +409,29 @@ def main():
     # PreTrain(unet, pretrainedUNet)
     
     # X_train, Y_train, X_test, Y_test = LoadPretrainingData()
-    model = UNetClassic()
+    # model = UNetClassic()
     # print(model.summary())
     
     weight_loss = calculateLossWeights(Y_train)
     # print(weight_loss)
     
+    unet = UNetClassic()
+    print(unet.summary())
+    
+    # toymodel = ToyModel()
+    # print(toymodel.summary())
+    
+    model = unet
+    
     # model = LoadModel(pretrainedUNet, 3)
-    Compile(model, loss='weighted_categorical', weight_loss=weight_loss)
-    Train(model, X_train[:1], Y_train[:1], X_test, Y_test, batch_size=1, epochs=50)
+    # Compile(model, loss='weighted_categorical', weight_loss=weight_loss)
+    
+    # Test(model, X_train[:1], Y_train[:1])
+    
+    # Train(model, X_train, Y_train, X_test, Y_test, batch_size=1, epochs=5)
+    
+    # Test(model, X_train[:5], Y_train[:5])
+    
     
     
     
