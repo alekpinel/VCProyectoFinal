@@ -33,6 +33,30 @@ from keras.optimizers import SGD
 #The local GPU used to run out of memory, so we limited the memory usage:
 os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
+# Esta función pinta dos gráficas, una con la evolución
+# de la función de pérdida en el conjunto de train y
+# en el de validación, y otra con la evolución de la
+# accuracy en el conjunto de train y el de validación.
+# Es necesario pasarle como parámetro el historial del
+# entrenamiento del modelo (lo que devuelven las
+# funciones fit() y fit_generator()).
+def mostrarEvolucion(name, hist):
+    loss = hist.history['loss']
+    val_loss = hist.history['val_loss']
+    plt.plot(loss)
+    plt.plot(val_loss)
+    plt.legend(['Training loss', 'Validation loss'])
+    plt.title(name)
+    plt.show()
+    
+    acc = hist.history['accuracy']
+    val_acc = hist.history['val_accuracy']
+    plt.plot(acc)
+    plt.plot(val_acc)
+    plt.legend(['Training accuracy','Validation accuracy'])
+    plt.title(name)
+    plt.show()
+
 def ToGray(img):
     return cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
 
@@ -152,8 +176,12 @@ def ToCategoricalMatrix(data):
     data = categorical.reshape(originalShape + (totalFeatures,))
     return data
 
+def MaskMonoband(data):
+    return np.argmax(data, axis=-1)
+
 #Show the percent of each class
-def ClassPertentage(masks):
+def ClassPercentage(masks):
+    masks = MaskMonoband(masks)
     unique, counts = np.unique(masks, return_counts=True)
     total = sum(counts)
     percents = [x/total*100 for x in counts]
@@ -330,23 +358,25 @@ def LoadModel(pathtosave, n_classes):
     return model
 
 def main():
-    # X_train, Y_train, X_test, Y_test = LoadData()
+    X_train, Y_train, X_test, Y_test = LoadData()
     
-    # print(X_train.shape)
-    # print(Y_train.shape)
-    # print(X_test.shape)
-    # print(Y_test.shape)
+    print(X_train.shape)
+    print(Y_train.shape)
+    print(X_test.shape)
+    print(Y_test.shape)
+    
+    ClassPercentage(Y_train)
     
     #Pretrain block
     # unet = UNetClassic()
     # PreTrain(unet, pretrainedUNet)
     
-    X_train, Y_train, X_test, Y_test = LoadPretrainingData()
-    model = LoadModel(pretrainedUNet, 1)
-    Compile(model, loss='binary')
-    Train(model, X_train, Y_train, X_test, Y_test, batch_size=4, epochs=30)
+    # X_train, Y_train, X_test, Y_test = LoadPretrainingData()
+    # model = LoadModel(pretrainedUNet, 1)
+    # Compile(model, loss='binary')
+    # Train(model, X_train, Y_train, X_test, Y_test, batch_size=4, epochs=30)
     
-    # ClassPertentage(Y_train)
+    
     
     # unet = UNetClassic()
     # unet.summary()
