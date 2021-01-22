@@ -7,7 +7,6 @@ Created on Tue Jan 19 12:22:51 2021
 """
 
 import numpy as np
-import proyectovc
 
 def calculateLossWeights(masks):
     '''

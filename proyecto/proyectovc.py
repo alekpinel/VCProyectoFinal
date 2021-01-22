@@ -31,6 +31,9 @@ from PIL import Image
 
 from keras.optimizers import SGD
 
+from loss import calculateLossWeights
+from visualization import visualize
+
 #The local GPU used to run out of memory, so we limited the memory usage:
 os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
@@ -307,20 +310,23 @@ def UNetClassic(input_shape=(256, 256, 3), n_classes=3):
     model = Model(model_input, model_output)
     return model
 
-
-# Compile with the optimizer and the loss function
-def Compile(model, loss='categorical'):
-    optimizer = SGD(lr = 0.01, decay = 1e-6, momentum = 0.9, nesterov = True)
-    
-    if (loss == 'binary'):
-        loss = keras.losses.binary_crossentropy
-    else:
-        loss = keras.losses.categorical_crossentropy
-    
-    
+#Compile for binary data (pretraining)
+def CompileBinary(model):
+    loss = keras.losses.binary_crossentropy
     model.compile(optimizer='adam',
                   loss=loss,
                   metrics=['accuracy'])
+
+
+# Compile with the optimizer and the loss function
+def Compile(model, loss='weighted_categorical', weight_loss=None):
+    if (loss == 'weighted_categorical'):
+        loss_final = keras.losses.categorical_crossentropy
+        model.compile(optimizer='adam',
+                  loss=loss_final,
+                  metrics=['accuracy'],
+                  loss_weights=weight_loss)
+    return model
 
 def Train(model, X_train, Y_train, X_val, Y_val, batch_size=128, epochs=12):
     hist = model.fit(X_train, Y_train,
@@ -355,7 +361,7 @@ def AdjustModel(model, n_classes):
 def PreTrain(model, pathtosave):
     X_train, Y_train, X_test, Y_test = LoadPretrainingData()
     model = AdjustModel(model, 1)
-    Compile(model, loss='binary')
+    CompileBinary(model)
     Train(model, X_train, Y_train, X_test, Y_test, batch_size=4, epochs=30)
     model.save(pathtosave)
 
@@ -366,6 +372,9 @@ def LoadModel(pathtosave, n_classes):
 
 def main():
     X_train, Y_train, X_test, Y_test = LoadData()
+    
+    # for i in range(len(X_train)):
+    #     visualize(X_train[i], Y_train[i])
     
     # print(X_train.shape)
     # print(Y_train.shape)
@@ -380,10 +389,14 @@ def main():
     
     # X_train, Y_train, X_test, Y_test = LoadPretrainingData()
     model = UNetClassic()
-    print(model.summary())
+    # print(model.summary())
+    
+    weight_loss = calculateLossWeights(Y_train)
+    # print(weight_loss)
+    
     # model = LoadModel(pretrainedUNet, 3)
-    Compile(model, loss='categorical')
-    Train(model, X_train, Y_train, X_test, Y_test, batch_size=4, epochs=12)
+    Compile(model, loss='weighted_categorical', weight_loss=weight_loss)
+    Train(model, X_train[:1], Y_train[:1], X_test, Y_test, batch_size=1, epochs=50)
     
     
     

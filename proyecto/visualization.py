@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def visualize(image, mask, apply=False):
+    mask = np.argmax(mask, axis=-1)
     
     if isinstance(image, str):
         image = cv2.imread(image)
@@ -39,3 +40,5 @@ def visualize(image, mask, apply=False):
         ax3.imshow(mask_applied)
         plt.xticks([])
         plt.yticks([])
+        
+    plt.show()
