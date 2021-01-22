@@ -9,6 +9,7 @@ datapath = "../data/" #Local
 pretrainingdatapath = "../data_pretraining/"
 savedmodelspath = "./saves/"
 pretrainedUNet = savedmodelspath + "PretrainedUNet.h5"
+finalUNet = savedmodelspath + "SavedUNet.h5"
 
 import keras
 import os
@@ -38,8 +39,8 @@ os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 # en el de validación, y otra con la evolución de la
 # accuracy en el conjunto de train y el de validación.
 # Es necesario pasarle como parámetro el historial del
-# entrenamiento del modelo (lo que devuelven las
-# funciones fit() y fit_generator()).
+# entrenamiento del modelo (lo que devuelve la
+# función fit()).
 def mostrarEvolucion(name, hist):
     loss = hist.history['loss']
     val_loss = hist.history['val_loss']
@@ -218,8 +219,6 @@ def PlotBars(data, title=None, y_label=None):
         plt.bar(x, y)
     plt.show()
 
-
-    
 #UNet from a ResNet
 def UNetFromResNet(input_shape=(256, 256, 3), n_classes=3):
     #This models a decoder block
@@ -298,7 +297,11 @@ def UNetClassic(input_shape=(256, 256, 3), n_classes=3):
     x = DecoderLayer(64,  x, encoder1)
     
     #Output
-    x = Conv2D(n_classes, (3, 3), activation='sigmoid', padding='same')(x)
+    if (n_classes == 1):
+        x = Conv2D(n_classes, (3, 3), activation='sigmoid', padding='same')(x)
+    else:
+        x = Conv2D(n_classes, (3, 3), activation='softmax', padding='same')(x)
+        
     model_output = x
     
     model = Model(model_input, model_output)
@@ -315,7 +318,7 @@ def Compile(model, loss='categorical'):
         loss = keras.losses.categorical_crossentropy
     
     
-    model.compile(optimizer=optimizer,
+    model.compile(optimizer='adam',
                   loss=loss,
                   metrics=['accuracy'])
 
@@ -339,7 +342,11 @@ def AdjustModel(model, n_classes):
     
     #We eliminate the last layer
     x = model.layers[-2].output
-    model_output = Conv2D(n_classes, (3, 3), activation='sigmoid', padding='same')(x)
+    
+    if (n_classes == 1):
+        model_output = Conv2D(n_classes, (3, 3), activation='sigmoid', padding='same')(x)
+    else:
+        model_output = Conv2D(n_classes, (3, 3), activation='softmax', padding='same')(x)
     
     model = Model(model_input, model_output)
     
@@ -360,21 +367,23 @@ def LoadModel(pathtosave, n_classes):
 def main():
     X_train, Y_train, X_test, Y_test = LoadData()
     
-    print(X_train.shape)
-    print(Y_train.shape)
-    print(X_test.shape)
-    print(Y_test.shape)
+    # print(X_train.shape)
+    # print(Y_train.shape)
+    # print(X_test.shape)
+    # print(Y_test.shape)
     
-    ClassPercentage(Y_train)
+    # ClassPercentage(Y_train)
     
     #Pretrain block
     # unet = UNetClassic()
     # PreTrain(unet, pretrainedUNet)
     
     # X_train, Y_train, X_test, Y_test = LoadPretrainingData()
-    # model = LoadModel(pretrainedUNet, 1)
-    # Compile(model, loss='binary')
-    # Train(model, X_train, Y_train, X_test, Y_test, batch_size=4, epochs=30)
+    model = UNetClassic()
+    print(model.summary())
+    # model = LoadModel(pretrainedUNet, 3)
+    Compile(model, loss='categorical')
+    Train(model, X_train, Y_train, X_test, Y_test, batch_size=4, epochs=12)
     
     
     
