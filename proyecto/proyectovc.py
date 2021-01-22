@@ -31,7 +31,7 @@ from PIL import Image
 
 from keras.optimizers import SGD
 
-from loss import calculateLossWeights
+from loss import calculateLossWeights, calculateClassWeights
 from visualization import visualize
 
 #The local GPU used to run out of memory, so we limited the memory usage:
@@ -123,6 +123,9 @@ def LoadData(testpercent = 0.2, target_size=(256, 256)):
     Y_train = np.stack(trainmasks)
     X_test = np.stack(testimages)
     Y_test = np.stack(testmasks)
+    
+    X_train = X_train / 255
+    X_test = X_test / 255
     
     Y_train = ToCategoricalMatrix(Y_train)
     Y_test = ToCategoricalMatrix(Y_test)
@@ -301,7 +304,7 @@ def UNetClassic(input_shape=(256, 256, 3), n_classes=3):
     
     #Output
     if (n_classes == 1):
-        x = Conv2D(n_classes, (1, 1), activation='softmax', padding='same')(x)
+        x = Conv2D(n_classes, (1, 1), activation='sigmoid', padding='same')(x)
     else:
         x = Conv2D(n_classes, (1, 1), activation='softmax', padding='same')(x)
         
@@ -330,6 +333,7 @@ def Compile(model, loss='weighted_categorical', weight_loss=None):
     return model
 
 def Train(model, X_train, Y_train, X_val, Y_val, batch_size=128, epochs=12):
+    # class_weight = calculateClassWeights(Y_train)
     hist = model.fit(X_train, Y_train,
                         batch_size=batch_size,
                         epochs=epochs,
@@ -413,6 +417,7 @@ def main():
     # print(model.summary())
     
     weight_loss = calculateLossWeights(Y_train)
+    
     # print(weight_loss)
     
     unet = UNetClassic()
@@ -424,13 +429,13 @@ def main():
     model = unet
     
     # model = LoadModel(pretrainedUNet, 3)
-    # Compile(model, loss='weighted_categorical', weight_loss=weight_loss)
+    Compile(model, loss='weighted_categorical', weight_loss=weight_loss)
     
     # Test(model, X_train[:1], Y_train[:1])
     
-    # Train(model, X_train, Y_train, X_test, Y_test, batch_size=1, epochs=5)
+    Train(model, X_train[:], Y_train[:], X_test, Y_test, batch_size=1, epochs=5)
     
-    # Test(model, X_train[:5], Y_train[:5])
+    Test(model, X_train[:5], Y_train[:5])
     
     
     
