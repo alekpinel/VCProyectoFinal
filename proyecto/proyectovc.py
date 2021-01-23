@@ -9,7 +9,8 @@ datapath = "../data/" #Local
 pretrainingdatapath = "../data_pretraining/"
 savedmodelspath = "./saves/"
 pretrainedUNet = savedmodelspath + "PretrainedUNet.h5"
-finalUNet = savedmodelspath + "SavedUNet.h5"
+savedUNet = savedmodelspath + "SavedUNet.h5"
+tempUNet = savedmodelspath + "TempUNet.h5"
 
 import keras
 import os
@@ -31,8 +32,8 @@ from PIL import Image
 
 from keras.optimizers import SGD
 
-from loss import calculateLossWeights, calculateClassWeights
-from visualization import visualize
+from loss import *
+from visualization import *
 
 #The local GPU used to run out of memory, so we limited the memory usage:
 os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
@@ -81,14 +82,6 @@ def LoadImage(filename, color = True):
       img = cv2.imread(filename,cv2.IMREAD_GRAYSCALE)
 
     return img
-
-#Shows an Image using Matplotlib 
-def ShowImage(img, title=None):
-    plt.imshow(img, cmap='gray')
-    if (title != None):
-        plt.title(title)
-    plt.xticks([]),plt.yticks([])
-    plt.show()
 
 #Load the data from the datapath directory and resize all the images
 def LoadData(testpercent = 0.2, target_size=(256, 256)):
@@ -269,6 +262,7 @@ def UNetFromResNet(input_shape=(256, 256, 3), n_classes=3):
 def UNetClassic(input_shape=(256, 256, 3), n_classes=3):
     #Layer of encoder: 2 convs and pooling
     def EncoderLayer(filters, x):
+        # x = BatchNormalization()(x)
         x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
         x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
         feature_layer = x
@@ -279,6 +273,7 @@ def UNetClassic(input_shape=(256, 256, 3), n_classes=3):
         x = UpSampling2D(size=(2,2))(x)
         x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
         x = Concatenate()([x, skip])
+        # x = BatchNormalization()(x)
         x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
         x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
         return x
@@ -324,11 +319,18 @@ def CompileBinary(model):
 # Compile with the optimizer and the loss function
 def Compile(model, loss='weighted_categorical', weight_loss=None):
     if (loss == 'weighted_categorical'):
+        # loss_final = keras.losses.categorical_crossentropy
+        loss_final = WeightedCategoricalCrossEntropy(weight_loss)
+        model.compile(optimizer='adam',
+                  loss=loss_final,
+                  metrics=['accuracy'],
+                  # loss_weights=weight_loss
+                  )
+    elif (loss == 'categorical_crossentropy'):
         loss_final = keras.losses.categorical_crossentropy
         model.compile(optimizer='adam',
-                  loss='categorical_crossentropy',
+                  loss=loss_final,
                   metrics=['accuracy'],
-                  loss_weights=weight_loss
                   )
     return model
 
@@ -346,13 +348,24 @@ def Test(model, X_test, Y_test):
     labels = np.argmax(Y_test, axis = -1)
     preds = np.argmax(predicciones, axis = -1)
     
+    print(f"Y_test: {Y_test.shape} labels: {labels.shape} predicciones: mask: {predicciones.shape} {preds.shape}")
+    
     accuracy = sum(labels.reshape((-1,)) == preds.reshape((-1,)))/len(labels.reshape((-1,)))
     
     print(f"Accuracy={accuracy}")
     
     for i in range(len(X_test)):
+        print(f"Maximos Background {np.max(predicciones[i,:,:,0].reshape((-1,)))}")
+        print(f"Maximos Blood cells {np.max(predicciones[i,:,:,1].reshape((-1,)))}")
+        print(f"Maximos Bacteries {np.max(predicciones[i,:,:,2].reshape((-1,)))}")
+        
+        ShowImage(predicciones[i,:,:,0], "Background")
+        ShowImage(predicciones[i,:,:,1], "Blood cells")
+        ShowImage(predicciones[i,:,:,2], "Bacteries")
         visualize(X_test[i], Y_test[i])
-        visualize(X_test[i], preds[i])
+        visualize(X_test[i], predicciones[i])
+        localaccuracy = sum((labels[i].reshape((-1,)) == preds[i].reshape((-1,))))/len(labels[i].reshape((-1,)))
+        print(f"{i}: Accuracy={localaccuracy}")
         
     return accuracy
 
@@ -363,7 +376,7 @@ def AdjustModel(model, n_classes):
     x = model.layers[-2].output
     
     if (n_classes == 1):
-        model_output = Conv2D(n_classes, (1, 1), activation='sigmoid', padding='same')(x)
+        model_output = Conv2D(1, (1, 1), activation='sigmoid', padding='same')(x)
     else:
         model_output = Conv2D(n_classes, (1, 1), activation='softmax', padding='same')(x)
     
@@ -378,9 +391,11 @@ def PreTrain(model, pathtosave):
     Train(model, X_train, Y_train, X_test, Y_test, batch_size=4, epochs=30)
     model.save(pathtosave)
 
-def LoadModel(pathtosave, n_classes):
+#Load a model from memory. If n_classes is provided, the output layer is changed accordingly
+def LoadModel(pathtosave, n_classes=None):
     model = keras.models.load_model(pathtosave)
-    model = AdjustModel(model, n_classes)
+    if (n_classes != None):
+        model = AdjustModel(model, n_classes)
     return model
 
 def ToyModel(input_shape=(256, 256, 3), n_classes=3):
@@ -416,25 +431,38 @@ def main():
     # model = UNetClassic()
     # print(model.summary())
     
-    weight_loss = calculateLossWeights(Y_train)
+    # weight_loss = calculateLossWeights(Y_train)
+    # class_weights = np.array([1.0, 15.0, 90.0])
+    # weight_loss = np.ones((256, 256, 3))*class_weights
+    
+    class_weights = calculateLossWeights(Y_train)
+    # class_weights = np.array([1.0, 15.0, 84.0])
+    class_weights = np.array([1.0, 15.0, 90.0])
     
     # print(weight_loss)
     
-    unet = UNetClassic()
-    print(unet.summary())
+    # unet = UNetClassic()
+    # print(unet.summary())
     
     # toymodel = ToyModel()
     # print(toymodel.summary())
     
-    model = unet
+    # model = unet
     
-    # model = LoadModel(pretrainedUNet, 3)
-    Compile(model, loss='weighted_categorical', weight_loss=weight_loss)
+    model = LoadModel(pretrainedUNet, 3)
+    # model = UNetClassic()
+    # model = LoadModel(savedUNet)
+    # Compile(model, loss='weighted_categorical', weight_loss=class_weights)
+    Compile(model, loss='categorical_crossentropy', weight_loss=class_weights)
     
     # Test(model, X_train[:1], Y_train[:1])
     
-    Train(model, X_train[:], Y_train[:], X_test, Y_test, batch_size=1, epochs=5)
+    Train(model, X_train[:50], Y_train[:50], X_test, Y_test, batch_size=1, epochs=5)
     
+    model.save(tempUNet)
+    # model.save(savedUNet)
+    
+    print(f"Class Weights: {class_weights}")
     Test(model, X_train[:5], Y_train[:5])
     
     
