@@ -190,8 +190,8 @@ def GetGenerators(X_train, Y_train, X_test, Y_test, validation_split=0.1, batch_
     else:
         data_generator_args = basic_generator_args
     
-    train_image_datagen = ImageDataGenerator(**data_generator_args)
-    train_masks_datagen = ImageDataGenerator(**data_generator_args)
+    train_image_datagen = ImageDataGenerator(**data_augmentation_generator_args)
+    train_masks_datagen = ImageDataGenerator(**data_augmentation_generator_args)
     test_image_datagen = ImageDataGenerator()
     test_masks_datagen = ImageDataGenerator()
     
@@ -373,6 +373,56 @@ def UNetClassic(input_shape=(256, 256, 3), n_classes=3):
     model = Model(model_input, model_output)
     return model
 
+#Classic implementation of UNet
+def UNetV2(input_shape=(256, 256, 3), n_classes=3):
+    #Layer of encoder: 2 convs and pooling
+    def EncoderLayer(filters, x):
+        # x = BatchNormalization()(x)
+        x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
+        x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
+        feature_layer = x
+        x = MaxPooling2D()(x)
+        return x, feature_layer
+    #Layer of decoder, upsampling, conv, concatenation and 2 convs
+    def DecoderLayer(filters, x, skip):
+        x = UpSampling2D(size=(2,2))(x)
+        x = Concatenate()([x, skip])
+        # x = BatchNormalization()(x)
+        x = Conv2DTranspose(filters, (3, 3), activation='relu', padding='same')(x)
+        x = Conv2DTranspose(filters, (3, 3), activation='relu', padding='same')(x)
+        return x
+    
+    #Input
+    x = Input(input_shape)
+    model_input = x
+    
+    #Encoder
+    x, encoder1 = EncoderLayer(32,  x)
+    x, encoder2 = EncoderLayer(64, x)
+    x, encoder3 = EncoderLayer(128, x)
+    x, encoder4 = EncoderLayer(256, x)
+    
+    #Centre
+    x = Conv2D(512, (3, 3), activation='relu', padding='same')(x)
+    x = Conv2D(512, (3, 3), activation='relu', padding='same')(x)
+    
+    #Decoder
+    x = DecoderLayer(256, x, encoder4)
+    x = DecoderLayer(128, x, encoder3)
+    x = DecoderLayer(64, x, encoder2)
+    x = DecoderLayer(32,  x, encoder1)
+    
+    #Output
+    if (n_classes == 1):
+        x = Conv2D(n_classes, (1, 1), activation='sigmoid', padding='same')(x)
+    else:
+        x = Conv2D(n_classes, (1, 1), activation='softmax', padding='same')(x)
+        
+    model_output = x
+    
+    model = Model(model_input, model_output)
+    return model
+
 #Compile for binary data (pretraining)
 def CompileBinary(model):
     loss = keras.losses.binary_crossentropy
@@ -390,7 +440,7 @@ def Compile(model, loss='weighted_categorical', weight_loss=None):
                   metrics=['accuracy', mean_dice])
         
     elif (loss == 'dice'):
-        loss_final = dice_loss
+        loss_final = standard_dice
         model.compile(optimizer='adam',
                   loss=loss_final,
                   metrics=['accuracy', mean_dice])
@@ -402,10 +452,7 @@ def Compile(model, loss='weighted_categorical', weight_loss=None):
                   metrics=['accuracy', mean_dice])
     return model
 
-def Train(model, train_gen, val_gen, steps_per_epoch=None, batch_size=128, epochs=12):
-    if (steps_per_epoch is None):
-        n_data = 300
-        steps_per_epoch = n_data/batch_size
+def Train(model, train_gen, val_gen, steps_per_epoch=100, batch_size=1, epochs=12):
     
     hist = model.fit(train_gen,
                         batch_size=batch_size,
@@ -489,8 +536,67 @@ def ToyModel(input_shape=(256, 256, 3), n_classes=3):
 def main():
     X_train, Y_train, X_test, Y_test = LoadData()
     train_gen, val_gen, test_gen = GetGenerators(X_train, Y_train, X_test, Y_test,
-                                                 data_augmentation=True,
-                                                 batch_size=1)
+                                                  data_augmentation=True,
+                                                  batch_size=4)
+    
+    # BATCH_SIZE = 16
+    # # https://github.com/keras-team/keras/issues/3059#issuecomment-364787723
+    # training_generation_args = dict(
+    # #     width_shift_range=0.3,
+    # #     height_shift_range=0.3,
+    #     horizontal_flip=True,
+    #     vertical_flip=True,
+    #     zoom_range=0.2,
+    #     validation_split=0.1
+    # )
+    # train_image_datagen = ImageDataGenerator(**training_generation_args)
+    # train_label_datagen = ImageDataGenerator(**training_generation_args)
+    
+    # X_train, Y_train, X_test, Y_test = LoadData()
+    
+    # # data load
+    # training_image_generator = train_image_datagen.flow(
+    #     X_train,
+    #     # target_size=(IMAGE_HEIGHT, IMAGE_WIDTH),
+    #     # class_mode=None,
+    #     subset='training',
+    #     batch_size=BATCH_SIZE,
+    #     seed=1
+    # )
+    # training_label_generator = train_label_datagen.flow(
+    #     Y_train,
+    #     # target_size=(IMAGE_HEIGHT, IMAGE_WIDTH),
+    #     # class_mode=None,
+    #     subset='training',
+    #     batch_size=BATCH_SIZE,
+    #     # color_mode='grayscale',
+    #     seed=1
+    # )
+    
+    
+    # # validation data load
+    # validation_image_generator = train_image_datagen.flow(
+    #     X_train,
+    #     # target_size=(IMAGE_HEIGHT, IMAGE_WIDTH),
+    #     # class_mode=None,
+    #     subset='validation',
+    #     batch_size=BATCH_SIZE,
+    #     seed=1
+    # )
+    # validation_label_generator = train_label_datagen.flow(
+    #     Y_train,
+    #     # target_size=(IMAGE_HEIGHT, IMAGE_WIDTH),
+    #     # class_mode=None,
+    #     subset='validation',
+    #     batch_size=BATCH_SIZE,
+    #     # color_mode='grayscale',
+    #     seed=1
+    # )
+    
+    # train_generator = zip(training_image_generator, training_label_generator)
+    # validation_generator = zip(validation_image_generator, validation_label_generator)
+    
+    
     
     # test_imgs, labels = train_gen.__next__()
     # print(len(test_imgs))
@@ -528,6 +634,7 @@ def main():
     
     # print(weight_loss)
     
+    # unet = UNetV2()
     unet = UNetClassic()
     print(unet.summary())
     
@@ -539,12 +646,13 @@ def main():
     # model = LoadModel(pretrainedUNet, 3)
     # model = UNetClassic()
     # model = LoadModel(savedUNet)
-    # Compile(model, loss='weighted_categorical', weight_loss=class_weights)
+    
+    # Compile(model, loss='categorical_crossentropy')
     Compile(model, loss='weighted_categorical', weight_loss=class_weights)
     
     # Test(model, X_train[:1], Y_train[:1])
     
-    Train(model, train_gen, val_gen, batch_size=1, epochs=5)
+    Train(model, train_gen, val_gen, steps_per_epoch=400, batch_size=1, epochs=5)
     
     model.save(tempUNet)
     # model.save(savedUNet)

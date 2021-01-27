@@ -301,6 +301,8 @@ model.compile(optimizer='adam',
 
 tf.keras.utils.plot_model(model, show_shapes=True)
 
+print(model.summary())
+
 model_history = model.fit(train_generator,
                           epochs=5,
                           steps_per_epoch=100,
