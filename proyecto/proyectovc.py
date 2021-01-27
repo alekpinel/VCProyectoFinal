@@ -402,9 +402,10 @@ def Compile(model, loss='weighted_categorical', weight_loss=None):
                   metrics=['accuracy', mean_dice])
     return model
 
-def Train(model, train_gen, val_gen, batch_size=128, epochs=12):
-    n_data = 300
-    steps_per_epoch = n_data/batch_size
+def Train(model, train_gen, val_gen, steps_per_epoch=None, batch_size=128, epochs=12):
+    if (steps_per_epoch is None):
+        n_data = 300
+        steps_per_epoch = n_data/batch_size
     
     hist = model.fit(train_gen,
                         batch_size=batch_size,
