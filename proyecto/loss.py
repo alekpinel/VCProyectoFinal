@@ -35,14 +35,9 @@ def calculateClassWeights(masks):
     '''
     Calculate a loss weight for each class inversely proportional to the
     occurences of each class
-    '''
-    
-    count_per_class = np.sum(masks, axis=(0,1,2))
-    
-    # El peso de cada clase es inversamente porporcional a la proporción
-    # en la que aparezca
-    return np.sum(count_per_class)/count_per_class.astype(np.float32)
-
+    '''    
+    count_per_class = np.sum(masks, axis=(0,1,2))          
+    return np.max(count_per_class)/(count_per_class.astype(np.float32))
 
 # =============================================================================
 # Funciones de pérdida
@@ -83,32 +78,62 @@ def weighted_categorical_crossentropy(weights):
 
     return loss
 
-# Dice creo que OK
-def dice_loss(y_true, y_pred):
+# def dice_coef(y_true, y_pred, smooth, thresh):
+#     y_pred = y_pred > thresh
+#     y_true_f = K.flatten(y_true)
+#     y_pred_f = K.flatten(y_pred)
+#     intersection = K.sum(y_true_f * y_pred_f)
+
+#     return (2. * intersection + smooth) / (K.sum(y_true_f) + K.sum(y_pred_f) + smooth)
+
+
+# def dice_loss(smooth, thresh):
+#   def dice(y_true, y_pred):
+#     return -dice_coef(y_true, y_pred, smooth, thresh)
+#   return dice
+
+
+
+def log_dice(y_true, y_pred, smooth=1):
+    return -K.log(dice(y_true, y_pred, smooth))
+
+
+def standard_dice(y_true, y_pred, smooth=1):
+    return 1 - dice(y_true, y_pred, smooth)
+
+
+def dice(y_true, y_pred, smooth=1):
+    intersection = K.sum(y_true * y_pred, axis=[1, 2, 3])
+    union = K.sum(y_true, axis=[1, 2, 3]) + K.sum(y_pred, axis=[1, 2, 3])
+    return K.mean((2. * intersection + smooth) / (union + smooth), axis=0)
+
+
+# # Dice creo que OK
+# def dice_loss(y_true, y_pred):
     
-    axes = (1,2) # W,H of each image
-    smooth = 0.001 # avoid zero division in case of not present class
+#     axes = (1,2) # W,H of each image
+#     smooth = 0.001 # avoid zero division in case of not present class
     
-    # TP
-    intersection = K.sum(K.abs(y_true*y_pred), axis = axes)
+#     # TP
+#     intersection = K.sum(K.abs(y_true*y_pred), axis = axes)
     
-    # 2TP + FP + FN
-    mask_sum = K.sum(K.abs(y_true), axis=axes) + K.sum(K.abs(y_pred), axis=axes)
+#     # 2TP + FP + FN
+#     mask_sum = K.sum(K.abs(y_true), axis=axes) + K.sum(K.abs(y_pred), axis=axes)
     
-    # Negative because keras will try to minimize
-    # Another option: 1 - dice
-    dice = - (2*intersection + smooth)/(mask_sum + smooth)
+#     # Negative because keras will try to minimize
+#     # Another option: 1 - dice
+#     dice = - (2*intersection + smooth)/(mask_sum + smooth)
     
-    # Mean only the represented classes
-    mask = K.cast(K.not_equal(mask_sum, 0), 'float32')
-    non_zero_count = K.sum(mask, axis = -1)
-    non_zero_sum = K.sum(dice * mask, axis = -1)
+#     # Mean only the represented classes
+#     mask = K.cast(K.not_equal(mask_sum, 0), 'float32')
+#     non_zero_count = K.sum(mask, axis = -1)
+#     non_zero_sum = K.sum(dice * mask, axis = -1)
         
-    # Creo que esto debería ser equivalente
-    # return K.mean(non_zero_sum/non_zero_count)
+#     # Creo que esto debería ser equivalente
+#     # return K.mean(non_zero_sum/non_zero_count)
     
-    # Devuelve Dice medio para cada imagen shape(batch,) 
-    return non_zero_sum/non_zero_count
+#     # Devuelve Dice medio para cada imagen shape(batch,) 
+#     return non_zero_sum/non_zero_count
     
 ''' Uso '''
 # loss = weighted_categorical_crossentropy(weights)
@@ -118,6 +143,7 @@ def dice_loss(y_true, y_pred):
 # loss = weighted_categorical_crossentropy(np.array([1,1,1]).astype(np.float32))
 # true = np.array([[[1,0,0],[0,1,0],[0,0,1]],[[1,0,0],[0,1,0],[0,0,1]],[[1,0,0],[0,1,0],[0,0,1]],[[1,0,0],[0,1,0],[0,0,1]]])[np.newaxis, :].astype(np.float32)
 # pred = np.array([[[1,0,0],[0,1,0],[0,0,1]],[[1,0,0],[0,1,0],[0,0,1]],[[1,0,0],[0,1,0],[0,0,1]],[[1,0,0],[0,1,0],[0,0,1]]])[np.newaxis, :].astype(np.float32)
+
 
 
 ''' METRICAS '''
@@ -151,11 +177,13 @@ def seg_metrics(y_true, y_pred, metric_name):
     
     return K.mean(non_zero_sum / non_zero_count)
 
+
 def mean_iou(y_true, y_pred):
     """
     Compute mean Intersection over Union of two segmentation masks, via Keras.
     """
     return seg_metrics(y_true, y_pred, metric_name='iou')
+
 
 def mean_dice(y_true, y_pred):
     """
