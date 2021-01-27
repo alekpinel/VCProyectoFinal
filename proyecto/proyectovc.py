@@ -167,6 +167,70 @@ def LoadPretrainingData(target_size=(256, 256)):
     
     return X_train, Y_train, X_test, Y_test
     
+#Get the generators from raw data
+def GetGenerators(X_train, Y_train, X_test, Y_test, validation_split=0.1, batch_size=128, data_augmentation=False, seed=None):
+    basic_generator_args = dict(
+        validation_split=validation_split
+    )
+    
+    data_augmentation_generator_args = dict(
+    #     width_shift_range=0.3,
+    #     height_shift_range=0.3,
+        horizontal_flip=True,
+        vertical_flip=True,
+        zoom_range=0.2,
+        validation_split=validation_split
+    )
+    
+    if (seed is None):
+        seed = 1
+    
+    if (data_augmentation):
+        data_generator_args = data_augmentation_generator_args
+    else:
+        data_generator_args = basic_generator_args
+    
+    train_image_datagen = ImageDataGenerator(**data_generator_args)
+    train_masks_datagen = ImageDataGenerator(**data_generator_args)
+    test_image_datagen = ImageDataGenerator()
+    test_masks_datagen = ImageDataGenerator()
+    
+    # Training
+    training_image_generator = train_image_datagen.flow(
+        X_train,
+        subset='training', batch_size=batch_size, seed=seed)
+    
+    training_masks_generator = train_masks_datagen.flow(
+        Y_train,
+        subset='training', batch_size=batch_size, seed=seed)
+    
+    train_gen = zip(training_image_generator, training_masks_generator)
+    
+    # Validation
+    validation_image_generator = train_image_datagen.flow(
+        X_train,
+        subset='validation', batch_size=batch_size, seed=seed)
+    
+    validation_label_generator = train_masks_datagen.flow(
+        Y_train,
+        subset='validation', batch_size=batch_size, seed=seed)
+    
+    val_gen = zip(validation_image_generator, validation_label_generator)
+    
+    # Test
+    test_image_generator = test_image_datagen.flow(
+        X_test,
+        batch_size=batch_size, seed=seed)
+    
+    test_label_generator = test_masks_datagen.flow(
+        Y_test,
+        batch_size=batch_size, seed=seed)
+    
+    test_gen = zip(test_image_generator, test_label_generator)
+    
+    return train_gen, val_gen, test_gen
+    
+
 
 def ToCategoricalMatrix(data):
     originalShape = data.shape
@@ -338,13 +402,17 @@ def Compile(model, loss='weighted_categorical', weight_loss=None):
                   metrics=['accuracy', mean_dice])
     return model
 
-def Train(model, X_train, Y_train, X_val, Y_val, batch_size=128, epochs=12):
-    # class_weight = calculateClassWeights(Y_train)
-    hist = model.fit(X_train, Y_train,
+def Train(model, train_gen, val_gen, batch_size=128, epochs=12):
+    n_data = 300
+    steps_per_epoch = n_data/batch_size
+    
+    hist = model.fit(train_gen,
                         batch_size=batch_size,
                         epochs=epochs,
                         verbose=1,
-                        validation_data=(X_val, Y_val))
+                        validation_data=val_gen,
+                        steps_per_epoch=steps_per_epoch,
+                        validation_steps=9)
     return hist
 
 def Test(model, X_test, Y_test):
@@ -414,60 +482,25 @@ def ToyModel(input_shape=(256, 256, 3), n_classes=3):
     model = Model(model_input, model_output)
     return model
 
-def ProcessData(validation_split=0.1, batch_size=128, data_augmentation=False, seed=None):
-    X_train, Y_train, X_test, Y_test = LoadData()
-    
-    basic_generator_args = dict(
-        validation_split=validation_split
-    )
-    
-    data_augmentation_generator_args = dict(
-    #     width_shift_range=0.3,
-    #     height_shift_range=0.3,
-        horizontal_flip=True,
-        vertical_flip=True,
-        zoom_range=0.2,
-        validation_split=validation_split
-    )
-    
-    if (seed is None):
-        seed = 1
-    
-    if (data_augmentation):
-        data_generator_args = data_augmentation_generator_args
-    else:
-        data_generator_args = basic_generator_args
-    
-    train_image_datagen = ImageDataGenerator(**data_generator_args)
-    train_label_datagen = ImageDataGenerator(**data_generator_args)
-    
-    training_image_generator = train_image_datagen.flow(
-        X_train,
-        subset='training', batch_size=batch_size, seed=1)
-    
-    training_masks_generator = train_label_datagen.flow(
-        Y_train,
-        subset='training', batch_size=batch_size, seed=1)
-    
-    train_gen = zip(training_image_generator, training_masks_generator)
-    
-    # Validation
-    validation_image_generator = train_image_datagen.flow(
-        X_train,
-        subset='validation', batch_size=batch_size, seed=1)
-    
-    validation_label_generator = train_label_datagen.flow(
-        Y_train,
-        subset='validation', batch_size=batch_size, seed=1)
-    
-    val_gen = zip(validation_image_generator, validation_label_generator)
+
     
 
 def main():
     X_train, Y_train, X_test, Y_test = LoadData()
+    train_gen, val_gen, test_gen = GetGenerators(X_train, Y_train, X_test, Y_test,
+                                                 data_augmentation=True,
+                                                 batch_size=1)
     
-    # for i in range(len(X_train)):
-    #     visualize(X_train[i], Y_train[i])
+    # test_imgs, labels = train_gen.__next__()
+    # print(len(test_imgs))
+    
+    # return 0
+    
+    # for i in range(10):
+    #     test_imgs, labels = train_gen.__next__()
+    #     visualize(test_imgs[0], labels[0])
+    
+    # return 0
     
     # print(X_train.shape)
     # print(Y_train.shape)
@@ -489,7 +522,7 @@ def main():
     # weight_loss = np.ones((256, 256, 3))*class_weights
     
     class_weights = calculateClassWeights(Y_train)
-    class_weights = np.array([6.0, 14.0, 78.0])
+    # class_weights = np.array([6.0, 14.0, 78.0])
     # class_weights = np.array([1.0, 1.0, 1.0])
     
     # print(weight_loss)
@@ -510,7 +543,7 @@ def main():
     
     # Test(model, X_train[:1], Y_train[:1])
     
-    Train(model, X_train[:], Y_train[:], X_test, Y_test, batch_size=1, epochs=5)
+    Train(model, train_gen, val_gen, batch_size=1, epochs=5)
     
     model.save(tempUNet)
     # model.save(savedUNet)
