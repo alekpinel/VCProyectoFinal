@@ -103,6 +103,8 @@ def dice_loss(y_true, y_pred):
         
     # Creo que esto debería ser equivalente
     # return K.mean(non_zero_sum/non_zero_count)
+    
+    # Devuelve Dice medio para cada imagen shape(batch,) 
     return non_zero_sum/non_zero_count
     
 ''' Uso '''
