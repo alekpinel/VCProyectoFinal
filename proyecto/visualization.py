@@ -64,11 +64,15 @@ def ShowEvolution(name, hist):
     # plt.title(name)
     # plt.show()
     
-    dice = hist.history['mean_dice']
-    val_dice = hist.history['val_mean_dice']
-    plt.plot(dice)
-    plt.plot(val_dice)
-    plt.legend(['Training accuracy','Validation accuracy', 'Training dice','Validation dice'])
+    if ('mean_dice' in hist.history):
+        dice = hist.history['mean_dice']
+        val_dice = hist.history['val_mean_dice']
+        plt.plot(dice)
+        plt.plot(val_dice)
+        plt.legend(['Training accuracy','Validation accuracy', 'Training dice','Validation dice'])
+    else:
+        plt.legend(['Training accuracy','Validation accuracy'])
+    
     plt.title(name)
     plt.show()
 
@@ -92,4 +96,31 @@ def ShowImage(img, title=None):
     if (title != None):
         plt.title(title)
     plt.xticks([]),plt.yticks([])
+    plt.show()
+    
+#Plot bars. Data must be ("title", value) or ("title", value, color)
+def PlotBars(data, title=None, y_label=None):
+    strings = [i[0] for i in data]
+    x = [i for i in range(len(data))]
+    y = [i[1] for i in data]
+    
+    colors=None
+    if (len(data[0]) > 2):
+        colors = [i[2] for i in data]
+    
+    fig, ax = plt.subplots()
+    
+    if (title is not None):
+        ax.set_title(title)
+    if (y_label is not None):
+        ax.set_ylabel(y_label)
+    
+    # fig.autofmt_xdate()
+    x_labels=strings
+    plt.xticks(x, x_labels)
+    
+    if (colors is not None):
+        plt.bar(x, y, color=colors)
+    else:
+        plt.bar(x, y)
     plt.show()

@@ -175,8 +175,10 @@ def GetGenerators(X_train, Y_train, X_test, Y_test, validation_split=0.1, batch_
     )
     
     data_augmentation_generator_args = dict(
-    #     width_shift_range=0.3,
-    #     height_shift_range=0.3,
+        width_shift_range=0.1,
+        height_shift_range=0.1,
+        rotation_range=5,
+        
         horizontal_flip=True,
         vertical_flip=True,
         zoom_range=0.2,
@@ -256,33 +258,6 @@ def ClassPercentage(masks):
     print(f"Percent of pixels of each class:\nBackground: {percents[0]}\nBlood cells: {percents[1]}\nBacteries {percents[2]}")
     
     PlotBars(data, "Class Percentages", "Percent")
-
-#Plot bars. Data must be ("title", value) or ("title", value, color)
-def PlotBars(data, title=None, y_label=None):
-    strings = [i[0] for i in data]
-    x = [i for i in range(len(data))]
-    y = [i[1] for i in data]
-    
-    colors=None
-    if (len(data[0]) > 2):
-        colors = [i[2] for i in data]
-    
-    fig, ax = plt.subplots()
-    
-    if (title is not None):
-        ax.set_title(title)
-    if (y_label is not None):
-        ax.set_ylabel(y_label)
-    
-    # fig.autofmt_xdate()
-    x_labels=strings
-    plt.xticks(x, x_labels)
-    
-    if (colors is not None):
-        plt.bar(x, y, color=colors)
-    else:
-        plt.bar(x, y)
-    plt.show()
 
 #UNet from a ResNet
 def UNetFromResNet(input_shape=(256, 256, 3), n_classes=3):
@@ -506,7 +481,7 @@ def AdjustModel(model, n_classes):
     return model
     
 #Pretrain a model with the pre-train dataset
-def PreTrain(model, pathtosave):
+def PreTrain(model, pathtosave, name=""):
     X_train, Y_train, X_test, Y_test = LoadPretrainingData()
     
     model = AdjustModel(model, 1)
@@ -517,6 +492,9 @@ def PreTrain(model, pathtosave):
                         epochs=30,
                         verbose=1,
                         validation_data=(X_test, Y_test))
+    
+    name = name + " pre-train"
+    ShowEvolution(name, hist)
     
     model.save(pathtosave)
 
@@ -541,6 +519,19 @@ def ToyModel(input_shape=(256, 256, 3), n_classes=3):
 
 
 def main():
+    
+    w_list = {0.0: 1.0, 1.0:7.0, 2.0:89.0}
+    numbers = [i + 1 for i in range(10)]
+    
+    print(f"numbers: {numbers}")
+    
+    print(f"w_list: {w_list}")
+    
+    for n, w in zip(numbers, w_list):
+        print(f"n:{n} w:{w_list[w]}")
+    
+    return 0
+    
     X_train, Y_train, X_test, Y_test = LoadData()
     train_gen, val_gen, test_gen = GetGenerators(X_train, Y_train, X_test, Y_test,
                                                   data_augmentation=True,
@@ -567,7 +558,7 @@ def main():
     
     #Pretrain block
     # unet = UNetV2()
-    # PreTrain(unet, pretrainedUNetv2)
+    # PreTrain(unet, pretrainedUNetv2, name="UNet v2")
     # return 0
     
     class_weights = calculateClassWeights(Y_train)
@@ -578,20 +569,20 @@ def main():
     
     # print(weight_loss)
     
-    model = LoadModel(pretrainedUNetv2, 3)
-    # model = UNetV2()
+    # model = LoadModel(pretrainedUNetv2, 3)
+    model = UNetV2()
     # model = UNetClassic()
+    
+    print(model.summary())
     
     # Compile(model, loss='categorical_crossentropy')
     Compile(model, loss='weighted_categorical', weight_loss=class_weights)
     
     # Test(model, X_train[:1], Y_train[:1])
     
-    steps_per_epoch = 50
+    steps_per_epoch = 100
     
-    hist = Train(model, train_gen, val_gen, steps_per_epoch=steps_per_epoch, batch_size=1, epochs=50)
-    
-    print(hist.history)
+    hist = Train(model, train_gen, val_gen, steps_per_epoch=steps_per_epoch, batch_size=1, epochs=10)
     
     ShowEvolution("UNet", hist)
     
@@ -600,7 +591,6 @@ def main():
     
     print(f"Class Weights: {class_weights}")
     Test(model, X_train[:5], Y_train[:5])
-    
     
     
     
