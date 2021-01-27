@@ -6,6 +6,11 @@ Created on Sun Jan 17 11:05:22 2021
 """
 
 datapath = "../data/" #Local
+pretrainingdatapath = "../data_pretraining/"
+savedmodelspath = "./saves/"
+pretrainedUNet = savedmodelspath + "PretrainedUNet.h5"
+savedUNet = savedmodelspath + "SavedUNet.h5"
+tempUNet = savedmodelspath + "TempUNet.h5"
 
 import keras
 import os
@@ -23,8 +28,51 @@ from keras.layers import Conv2D, MaxPooling2D, Activation, AveragePooling2D
 from keras.layers import Add, Concatenate
 from keras.layers import UpSampling2D, Conv2DTranspose
 from keras.layers.normalization import BatchNormalization
+from PIL import Image
+from keras.preprocessing.image import ImageDataGenerator  
 
 from keras.optimizers import SGD
+
+from loss import *
+from visualization import *
+
+#The local GPU used to run out of memory, so we limited the memory usage:
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+
+# Esta función pinta dos gráficas, una con la evolución
+# de la función de pérdida en el conjunto de train y
+# en el de validación, y otra con la evolución de la
+# accuracy en el conjunto de train y el de validación.
+# Es necesario pasarle como parámetro el historial del
+# entrenamiento del modelo (lo que devuelve la
+# función fit()).
+def mostrarEvolucion(name, hist):
+    loss = hist.history['loss']
+    val_loss = hist.history['val_loss']
+    plt.plot(loss)
+    plt.plot(val_loss)
+    plt.legend(['Training loss', 'Validation loss'])
+    plt.title(name)
+    plt.show()
+    
+    acc = hist.history['accuracy']
+    val_acc = hist.history['val_accuracy']
+    plt.plot(acc)
+    plt.plot(val_acc)
+    plt.legend(['Training accuracy','Validation accuracy'])
+    plt.title(name)
+    plt.show()
+
+def ToGray(img):
+    return cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+
+def LoadGif(filename):
+    gif = cv2.VideoCapture(filename)
+    ret,frame = gif.read()
+    img = frame
+    # img = Image.fromarray(frame)
+    # img = img.convert('RGB')
+    return img
 
 #Function that load and image and convert it to RGB if needed
 def LoadImage(filename, color = True):
@@ -36,18 +84,10 @@ def LoadImage(filename, color = True):
 
     return img
 
-#Shows an Image using Matplotlib 
-def ShowImage(img, title=None):
-    plt.imshow(img, cmap='gray')
-    if (title != None):
-        plt.title(title)
-    plt.xticks([]),plt.yticks([])
-    plt.show()
-
 #Load the data from the datapath directory and resize all the images
 def LoadData(testpercent = 0.2, target_size=(256, 256)):
-    imagespath = datapath + "/images/"
-    maskspath = datapath + "/masks/"
+    imagespath = datapath + "images/"
+    maskspath = datapath + "masks/"
     
     names = os.listdir(imagespath)
     
@@ -59,7 +99,7 @@ def LoadData(testpercent = 0.2, target_size=(256, 256)):
         listmasks.append(LoadImage(maskspath + imagename, False))
     
     listimages = [cv2.resize(img, target_size[::-1]) for img in listimages]
-    listmasks = [cv2.resize(img, target_size[::-1]) for img in listmasks]
+    listmasks  = [cv2.resize(img, target_size[::-1]) for img in listmasks]
     
     #Randomize the order
     zipped = list(zip(listimages, listmasks))
@@ -78,10 +118,119 @@ def LoadData(testpercent = 0.2, target_size=(256, 256)):
     X_test = np.stack(testimages)
     Y_test = np.stack(testmasks)
     
+    X_train = X_train / 255
+    X_test = X_test / 255
+    
     Y_train = ToCategoricalMatrix(Y_train)
     Y_test = ToCategoricalMatrix(Y_test)
     
     return X_train, Y_train, X_test, Y_test
+
+def LoadPretrainingData(target_size=(256, 256)):
+    trainpath = pretrainingdatapath + "training/"
+    testpath = pretrainingdatapath + "test/"
+    
+    def LoadFolder(path, masks=False):
+        data = []
+        names = os.listdir(path)
+        for imagename in tqdm(names):
+            if (masks):
+                img = LoadGif(path + imagename)
+                img = ToGray(img)
+                data.append(img)
+            else:
+                data.append(LoadImage(path + imagename, True))
+        return data
+    
+    trainimages = LoadFolder(trainpath + 'images/')
+    trainmasks = LoadFolder(trainpath + 'mask/', True)
+    testimages = LoadFolder(testpath + 'images/')
+    testmasks = LoadFolder(testpath + 'mask/', True)
+    
+    trainimages = [cv2.resize(img, target_size[::-1]) for img in trainimages]
+    trainmasks = [cv2.resize(img, target_size[::-1]) for img in trainmasks]
+    testimages = [cv2.resize(img, target_size[::-1]) for img in testimages]
+    testmasks = [cv2.resize(img, target_size[::-1]) for img in testmasks]
+    
+    X_train = np.stack(trainimages)
+    Y_train = np.stack(trainmasks)
+    X_test = np.stack(testimages)
+    Y_test = np.stack(testmasks)
+    
+    X_train = X_train / 255
+    Y_train = Y_train / 255
+    X_test = X_test / 255
+    Y_test = Y_test / 255
+    
+    # Y_train = ToCategoricalMatrix(Y_train)
+    # Y_test = ToCategoricalMatrix(Y_test)
+    
+    return X_train, Y_train, X_test, Y_test
+    
+#Get the generators from raw data
+def GetGenerators(X_train, Y_train, X_test, Y_test, validation_split=0.1, batch_size=128, data_augmentation=False, seed=None):
+    basic_generator_args = dict(
+        validation_split=validation_split
+    )
+    
+    data_augmentation_generator_args = dict(
+    #     width_shift_range=0.3,
+    #     height_shift_range=0.3,
+        horizontal_flip=True,
+        vertical_flip=True,
+        zoom_range=0.2,
+        validation_split=validation_split
+    )
+    
+    if (seed is None):
+        seed = 1
+    
+    if (data_augmentation):
+        data_generator_args = data_augmentation_generator_args
+    else:
+        data_generator_args = basic_generator_args
+    
+    train_image_datagen = ImageDataGenerator(**data_generator_args)
+    train_masks_datagen = ImageDataGenerator(**data_generator_args)
+    test_image_datagen = ImageDataGenerator()
+    test_masks_datagen = ImageDataGenerator()
+    
+    # Training
+    training_image_generator = train_image_datagen.flow(
+        X_train,
+        subset='training', batch_size=batch_size, seed=seed)
+    
+    training_masks_generator = train_masks_datagen.flow(
+        Y_train,
+        subset='training', batch_size=batch_size, seed=seed)
+    
+    train_gen = zip(training_image_generator, training_masks_generator)
+    
+    # Validation
+    validation_image_generator = train_image_datagen.flow(
+        X_train,
+        subset='validation', batch_size=batch_size, seed=seed)
+    
+    validation_label_generator = train_masks_datagen.flow(
+        Y_train,
+        subset='validation', batch_size=batch_size, seed=seed)
+    
+    val_gen = zip(validation_image_generator, validation_label_generator)
+    
+    # Test
+    test_image_generator = test_image_datagen.flow(
+        X_test,
+        batch_size=batch_size, seed=seed)
+    
+    test_label_generator = test_masks_datagen.flow(
+        Y_test,
+        batch_size=batch_size, seed=seed)
+    
+    test_gen = zip(test_image_generator, test_label_generator)
+    
+    return train_gen, val_gen, test_gen
+    
+
 
 def ToCategoricalMatrix(data):
     originalShape = data.shape
@@ -92,8 +241,12 @@ def ToCategoricalMatrix(data):
     data = categorical.reshape(originalShape + (totalFeatures,))
     return data
 
+def MaskMonoband(data):
+    return np.argmax(data, axis=-1)
+
 #Show the percent of each class
-def ClassPertentage(masks):
+def ClassPercentage(masks):
+    masks = MaskMonoband(masks)
     unique, counts = np.unique(masks, return_counts=True)
     total = sum(counts)
     percents = [x/total*100 for x in counts]
@@ -130,8 +283,6 @@ def PlotBars(data, title=None, y_label=None):
         plt.bar(x, y)
     plt.show()
 
-
-    
 #UNet from a ResNet
 def UNetFromResNet(input_shape=(256, 256, 3), n_classes=3):
     #This models a decoder block
@@ -176,6 +327,7 @@ def UNetFromResNet(input_shape=(256, 256, 3), n_classes=3):
 def UNetClassic(input_shape=(256, 256, 3), n_classes=3):
     #Layer of encoder: 2 convs and pooling
     def EncoderLayer(filters, x):
+        # x = BatchNormalization()(x)
         x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
         x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
         feature_layer = x
@@ -186,6 +338,7 @@ def UNetClassic(input_shape=(256, 256, 3), n_classes=3):
         x = UpSampling2D(size=(2,2))(x)
         x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
         x = Concatenate()([x, skip])
+        # x = BatchNormalization()(x)
         x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
         x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
         return x
@@ -210,54 +363,209 @@ def UNetClassic(input_shape=(256, 256, 3), n_classes=3):
     x = DecoderLayer(64,  x, encoder1)
     
     #Output
-    x = Conv2D(n_classes, (3, 3), activation='sigmoid', padding='same')(x)
+    if (n_classes == 1):
+        x = Conv2D(n_classes, (1, 1), activation='sigmoid', padding='same')(x)
+    else:
+        x = Conv2D(n_classes, (1, 1), activation='softmax', padding='same')(x)
+        
     model_output = x
     
     model = Model(model_input, model_output)
     return model
 
-
-# Compile with the optimizer and the loss function
-def Compile(model):
-    optimizer = SGD(lr = 0.01, decay = 1e-6, momentum = 0.9, nesterov = True)
-    loss = keras.losses.categorical_crossentropy
-    
-    model.compile(optimizer=optimizer,
+#Compile for binary data (pretraining)
+def CompileBinary(model):
+    loss = keras.losses.binary_crossentropy
+    model.compile(optimizer='adam',
                   loss=loss,
                   metrics=['accuracy'])
 
-def TrainModel(model, X_train, Y_train, X_val, Y_val, batch_size=128):
-    hist = model.fit(X_train, Y_train,
+
+# Compile with the optimizer and the loss function
+def Compile(model, loss='weighted_categorical', weight_loss=None):
+    if (loss == 'weighted_categorical'):
+        loss_final = weighted_categorical_crossentropy(weight_loss)
+        model.compile(optimizer='adam',
+                  loss=loss_final,
+                  metrics=['accuracy', mean_dice])
+        
+    elif (loss == 'dice'):
+        loss_final = dice_loss
+        model.compile(optimizer='adam',
+                  loss=loss_final,
+                  metrics=['accuracy', mean_dice])
+        
+    elif (loss == 'categorical_crossentropy'):
+        loss_final = keras.losses.categorical_crossentropy
+        model.compile(optimizer='adam',
+                  loss=loss_final,
+                  metrics=['accuracy', mean_dice])
+    return model
+
+def Train(model, train_gen, val_gen, steps_per_epoch=None, batch_size=128, epochs=12):
+    if (steps_per_epoch is None):
+        n_data = 300
+        steps_per_epoch = n_data/batch_size
+    
+    hist = model.fit(train_gen,
                         batch_size=batch_size,
-                        epochs=12,
+                        epochs=epochs,
                         verbose=1,
-                        validation_data=(X_val, Y_val))
+                        validation_data=val_gen,
+                        steps_per_epoch=steps_per_epoch,
+                        validation_steps=9)
     return hist
 
-def TestModel(input_shape=(256, 256, 3), n_classes=3):
-    model = Sequential()
-    model.add(Conv2D(32, kernel_size=(3, 3),
-                     activation='relu',
-                     input_shape=input_shape, padding='same'))
-    model.add(Conv2D(n_classes, (3, 3), activation='sigmoid', padding='same'))
+def Test(model, X_test, Y_test):
+    predicciones = model.predict(X_test)
+    labels = np.argmax(Y_test, axis = -1)
+    preds = np.argmax(predicciones, axis = -1)
+    
+    print(f"Y_test: {Y_test.shape} labels: {labels.shape} predicciones: mask: {predicciones.shape} {preds.shape}")
+    
+    accuracy = sum(labels.reshape((-1,)) == preds.reshape((-1,)))/len(labels.reshape((-1,)))
+    
+    print(f"Accuracy={accuracy}")
+    
+    for i in range(len(X_test)):
+        print(f"Maximos Background {np.max(predicciones[i,:,:,0].reshape((-1,)))}")
+        print(f"Maximos Blood cells {np.max(predicciones[i,:,:,1].reshape((-1,)))}")
+        print(f"Maximos Bacteries {np.max(predicciones[i,:,:,2].reshape((-1,)))}")
+        
+        ShowImage(predicciones[i,:,:,0], "Background")
+        ShowImage(predicciones[i,:,:,1], "Blood cells")
+        ShowImage(predicciones[i,:,:,2], "Bacteries")
+        visualize(X_test[i], Y_test[i])
+        visualize(X_test[i], predicciones[i])
+        localaccuracy = sum((labels[i].reshape((-1,)) == preds[i].reshape((-1,))))/len(labels[i].reshape((-1,)))
+        print(f"{i}: Accuracy={localaccuracy}")
+        
+    return accuracy
+
+def AdjustModel(model, n_classes):
+    model_input = model.input
+    
+    #We eliminate the last layer
+    x = model.layers[-2].output
+    
+    if (n_classes == 1):
+        model_output = Conv2D(1, (1, 1), activation='sigmoid', padding='same')(x)
+    else:
+        model_output = Conv2D(n_classes, (1, 1), activation='softmax', padding='same')(x)
+    
+    model = Model(model_input, model_output)
+    
     return model
     
+def PreTrain(model, pathtosave):
+    X_train, Y_train, X_test, Y_test = LoadPretrainingData()
+    model = AdjustModel(model, 1)
+    CompileBinary(model)
+    Train(model, X_train, Y_train, X_test, Y_test, batch_size=4, epochs=30)
+    model.save(pathtosave)
+
+#Load a model from memory. If n_classes is provided, the output layer is changed accordingly
+def LoadModel(pathtosave, n_classes=None):
+    model = keras.models.load_model(pathtosave)
+    if (n_classes != None):
+        model = AdjustModel(model, n_classes)
+    return model
+
+def ToyModel(input_shape=(256, 256, 3), n_classes=3):
+    #Input
+    x = Input(input_shape)
+    model_input = x
+    
+    x = Conv2D(64, (3, 3), activation='relu', padding='same')(x)
+    
+    x = Conv2D(n_classes, (1, 1), activation='softmax', padding='same')(x)
+    model_output = x
+    model = Model(model_input, model_output)
+    return model
+
+
     
 
 def main():
     X_train, Y_train, X_test, Y_test = LoadData()
+    train_gen, val_gen, test_gen = GetGenerators(X_train, Y_train, X_test, Y_test,
+                                                 data_augmentation=True,
+                                                 batch_size=1)
     
-    print(X_train.shape)
-    print(Y_train.shape)
-    print(X_test.shape)
-    print(Y_test.shape)
+    # test_imgs, labels = train_gen.__next__()
+    # print(len(test_imgs))
     
-    # ClassPertentage(Y_train)
+    # return 0
+    
+    # for i in range(10):
+    #     test_imgs, labels = train_gen.__next__()
+    #     visualize(test_imgs[0], labels[0])
+    
+    # return 0
+    
+    # print(X_train.shape)
+    # print(Y_train.shape)
+    # print(X_test.shape)
+    # print(Y_test.shape)
+    
+    # ClassPercentage(Y_train)
+    
+    #Pretrain block
+    # unet = UNetClassic()
+    # PreTrain(unet, pretrainedUNet)
+    
+    # X_train, Y_train, X_test, Y_test = LoadPretrainingData()
+    # model = UNetClassic()
+    # print(model.summary())
+    
+    # weight_loss = calculateLossWeights(Y_train)
+    # class_weights = np.array([1.0, 15.0, 90.0])
+    # weight_loss = np.ones((256, 256, 3))*class_weights
+    
+    class_weights = calculateClassWeights(Y_train)
+    # class_weights = np.array([6.0, 14.0, 78.0])
+    # class_weights = np.array([1.0, 1.0, 1.0])
+    
+    # print(weight_loss)
     
     unet = UNetClassic()
-    unet.summary()
-    Compile(unet)
-    TrainModel(unet, X_train, Y_train, X_test, Y_test, batch_size=1)
+    print(unet.summary())
+    
+    # toymodel = ToyModel()
+    # print(toymodel.summary())
+    
+    model = unet
+    
+    # model = LoadModel(pretrainedUNet, 3)
+    # model = UNetClassic()
+    # model = LoadModel(savedUNet)
+    # Compile(model, loss='weighted_categorical', weight_loss=class_weights)
+    Compile(model, loss='weighted_categorical', weight_loss=class_weights)
+    
+    # Test(model, X_train[:1], Y_train[:1])
+    
+    Train(model, train_gen, val_gen, batch_size=1, epochs=5)
+    
+    model.save(tempUNet)
+    # model.save(savedUNet)
+    
+    print(f"Class Weights: {class_weights}")
+    Test(model, X_train[:5], Y_train[:5])
+    
+    
+    
+    
+    # unet = UNetClassic()
+    # unet.summary()
+    # Compile(unet)
+    # Train(unet, X_train, Y_train, X_test, Y_test, batch_size=1, epochs=5)
+    
+    # unet.save(savedmodelspath + 'UNet.h5')
+    
+    
+    # model = keras.models.load_model(savedmodelspath + 'UNet.h5')
+    # acc = Test(model, X_test, Y_test)
+    # print(f"Accuracy is: {acc}")
     
     
 

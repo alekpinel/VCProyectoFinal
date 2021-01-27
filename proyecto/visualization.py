@@ -2,7 +2,8 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
-def visualize(image, mask, apply=False):
+def visualize(image, mask, apply=False, title=None):
+    mask = MaskToCategorical(mask)
     
     if isinstance(image, str):
         image = cv2.imread(image)
@@ -39,3 +40,30 @@ def visualize(image, mask, apply=False):
         ax3.imshow(mask_applied)
         plt.xticks([])
         plt.yticks([])
+    
+    if (title != None):
+        plt.title(title)
+    
+    plt.show()
+
+def MaskToCategorical(mask):
+    if (len(mask.shape) == 3 and mask.shape[2] == 3):
+        mask = np.argmax(mask, axis=-1)
+    return mask
+
+def VisualizeMask(mask, title=None):
+    mask = MaskToCategorical(mask)
+    
+    rgb_mask = np.zeros((mask.shape[0], mask.shape[1], 3), dtype=np.uint8)
+    rgb_mask[mask==1] = [255,0,0]
+    rgb_mask[mask==2] = [0,255,0]
+    ShowImage(rgb_mask, title)
+    
+    
+#Shows an Image using Matplotlib 
+def ShowImage(img, title=None):
+    plt.imshow(img, cmap='gray')
+    if (title != None):
+        plt.title(title)
+    plt.xticks([]),plt.yticks([])
+    plt.show()

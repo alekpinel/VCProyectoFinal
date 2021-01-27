@@ -7,7 +7,9 @@ Created on Tue Jan 19 12:22:51 2021
 """
 
 import numpy as np
-from keras import backend as K
+import math
+import keras
+import keras.backend as K
 import tensorflow as tf
 
 def calculateLossWeights(masks):
@@ -25,7 +27,8 @@ def calculateLossWeights(masks):
     class_weights = np.sum(count_per_class)/count_per_class.astype(np.float64)
     
     # Replicamos los pesos al tamaño de la máscara original
-    return np.ones((mask_height, mask_width, 3))*class_weights
+    # return np.ones((mask_height, mask_width, 3))*class_weights
+    return class_weights
 
 
 def calculateClassWeights(masks):
@@ -187,3 +190,35 @@ def mean_dice(y_true, y_pred):
     Compute mean Dice coefficient of two segmentation masks.
     """
     return seg_metrics(y_true, y_pred, metric_name='dice')
+
+
+
+
+#####Seguramente borrar
+def WeightedCategoricalCrossEntropy(weights):
+    weights = K.variable(weights)
+        
+    def loss(y_true, y_pred):
+        # scale predictions so that the class probas of each sample sum to 1
+        y_pred /= K.sum(y_pred, axis=-1, keepdims=True)
+        # clip to prevent NaN's and Inf's
+        y_pred = K.clip(y_pred, K.epsilon(), 1 - K.epsilon())
+        # calc
+        loss = y_true * K.log(y_pred) * weights
+        loss = -K.sum(loss, -1)
+        return loss
+    
+    return loss
+    
+    # weights = np.array(weights)
+    # def loss(y_true, y_pred):
+    #     # scale predictions so that the class probas of each sample sum to 1
+    #     y_pred /= np.sum(y_pred, axis=-1, keepdims=True)
+    #     # clip to prevent NaN's and Inf's
+    #     y_pred = np.clip(y_pred, 0, 1)
+    #     # calc
+    #     loss = y_true * np.log(y_pred) * weights
+    #     loss = -np.sum(loss, -1)
+    #     return loss
+    
+    # return loss
