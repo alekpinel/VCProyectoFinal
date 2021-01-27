@@ -9,6 +9,7 @@ datapath = "../data/" #Local
 pretrainingdatapath = "../data_pretraining/"
 savedmodelspath = "./saves/"
 pretrainedUNet = savedmodelspath + "PretrainedUNet.h5"
+pretrainedUNetv2 = savedmodelspath + "PretrainedUNetv2.h5"
 savedUNet = savedmodelspath + "SavedUNet.h5"
 tempUNet = savedmodelspath + "TempUNet.h5"
 
@@ -504,11 +505,19 @@ def AdjustModel(model, n_classes):
     
     return model
     
+#Pretrain a model with the pre-train dataset
 def PreTrain(model, pathtosave):
     X_train, Y_train, X_test, Y_test = LoadPretrainingData()
+    
     model = AdjustModel(model, 1)
     CompileBinary(model)
-    Train(model, X_train, Y_train, X_test, Y_test, batch_size=4, epochs=30)
+    
+    hist = model.fit(X_train, Y_train,
+                        batch_size=4,
+                        epochs=30,
+                        verbose=1,
+                        validation_data=(X_test, Y_test))
+    
     model.save(pathtosave)
 
 #Load a model from memory. If n_classes is provided, the output layer is changed accordingly
@@ -531,71 +540,11 @@ def ToyModel(input_shape=(256, 256, 3), n_classes=3):
     return model
 
 
-    
-
 def main():
     X_train, Y_train, X_test, Y_test = LoadData()
     train_gen, val_gen, test_gen = GetGenerators(X_train, Y_train, X_test, Y_test,
                                                   data_augmentation=True,
                                                   batch_size=4)
-    
-    # BATCH_SIZE = 16
-    # # https://github.com/keras-team/keras/issues/3059#issuecomment-364787723
-    # training_generation_args = dict(
-    # #     width_shift_range=0.3,
-    # #     height_shift_range=0.3,
-    #     horizontal_flip=True,
-    #     vertical_flip=True,
-    #     zoom_range=0.2,
-    #     validation_split=0.1
-    # )
-    # train_image_datagen = ImageDataGenerator(**training_generation_args)
-    # train_label_datagen = ImageDataGenerator(**training_generation_args)
-    
-    # X_train, Y_train, X_test, Y_test = LoadData()
-    
-    # # data load
-    # training_image_generator = train_image_datagen.flow(
-    #     X_train,
-    #     # target_size=(IMAGE_HEIGHT, IMAGE_WIDTH),
-    #     # class_mode=None,
-    #     subset='training',
-    #     batch_size=BATCH_SIZE,
-    #     seed=1
-    # )
-    # training_label_generator = train_label_datagen.flow(
-    #     Y_train,
-    #     # target_size=(IMAGE_HEIGHT, IMAGE_WIDTH),
-    #     # class_mode=None,
-    #     subset='training',
-    #     batch_size=BATCH_SIZE,
-    #     # color_mode='grayscale',
-    #     seed=1
-    # )
-    
-    
-    # # validation data load
-    # validation_image_generator = train_image_datagen.flow(
-    #     X_train,
-    #     # target_size=(IMAGE_HEIGHT, IMAGE_WIDTH),
-    #     # class_mode=None,
-    #     subset='validation',
-    #     batch_size=BATCH_SIZE,
-    #     seed=1
-    # )
-    # validation_label_generator = train_label_datagen.flow(
-    #     Y_train,
-    #     # target_size=(IMAGE_HEIGHT, IMAGE_WIDTH),
-    #     # class_mode=None,
-    #     subset='validation',
-    #     batch_size=BATCH_SIZE,
-    #     # color_mode='grayscale',
-    #     seed=1
-    # )
-    
-    # train_generator = zip(training_image_generator, training_label_generator)
-    # validation_generator = zip(validation_image_generator, validation_label_generator)
-    
     
     
     # test_imgs, labels = train_gen.__next__()
@@ -617,44 +566,36 @@ def main():
     # ClassPercentage(Y_train)
     
     #Pretrain block
-    # unet = UNetClassic()
-    # PreTrain(unet, pretrainedUNet)
-    
-    # X_train, Y_train, X_test, Y_test = LoadPretrainingData()
-    # model = UNetClassic()
-    # print(model.summary())
-    
-    # weight_loss = calculateLossWeights(Y_train)
-    # class_weights = np.array([1.0, 15.0, 90.0])
-    # weight_loss = np.ones((256, 256, 3))*class_weights
+    # unet = UNetV2()
+    # PreTrain(unet, pretrainedUNetv2)
+    # return 0
     
     class_weights = calculateClassWeights(Y_train)
+    # class_weights = np.sqrt(class_weights)
     # class_weights = np.array([6.0, 14.0, 78.0])
     # class_weights = np.array([1.0, 1.0, 1.0])
+    # class_weights = np.array([10.0, 12.0, 76.0])
     
     # print(weight_loss)
     
-    # unet = UNetV2()
-    unet = UNetClassic()
-    print(unet.summary())
-    
-    # toymodel = ToyModel()
-    # print(toymodel.summary())
-    
-    model = unet
-    
-    # model = LoadModel(pretrainedUNet, 3)
+    model = LoadModel(pretrainedUNetv2, 3)
+    # model = UNetV2()
     # model = UNetClassic()
-    # model = LoadModel(savedUNet)
     
     # Compile(model, loss='categorical_crossentropy')
     Compile(model, loss='weighted_categorical', weight_loss=class_weights)
     
     # Test(model, X_train[:1], Y_train[:1])
     
-    Train(model, train_gen, val_gen, steps_per_epoch=400, batch_size=1, epochs=5)
+    steps_per_epoch = 50
     
-    model.save(tempUNet)
+    hist = Train(model, train_gen, val_gen, steps_per_epoch=steps_per_epoch, batch_size=1, epochs=50)
+    
+    print(hist.history)
+    
+    ShowEvolution("UNet", hist)
+    
+    # model.save(tempUNet)
     # model.save(savedUNet)
     
     print(f"Class Weights: {class_weights}")

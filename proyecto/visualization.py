@@ -46,6 +46,32 @@ def visualize(image, mask, apply=False, title=None):
     
     plt.show()
 
+
+def ShowEvolution(name, hist):
+    loss = hist.history['loss']
+    val_loss = hist.history['val_loss']
+    plt.plot(loss)
+    plt.plot(val_loss)
+    plt.legend(['Training loss', 'Validation loss'])
+    plt.title(name)
+    plt.show()
+    
+    acc = hist.history['accuracy']
+    val_acc = hist.history['val_accuracy']
+    plt.plot(acc)
+    plt.plot(val_acc)
+    # plt.legend(['Training accuracy','Validation accuracy'])
+    # plt.title(name)
+    # plt.show()
+    
+    dice = hist.history['mean_dice']
+    val_dice = hist.history['val_mean_dice']
+    plt.plot(dice)
+    plt.plot(val_dice)
+    plt.legend(['Training accuracy','Validation accuracy', 'Training dice','Validation dice'])
+    plt.title(name)
+    plt.show()
+
 def MaskToCategorical(mask):
     if (len(mask.shape) == 3 and mask.shape[2] == 3):
         mask = np.argmax(mask, axis=-1)
