@@ -29,6 +29,7 @@ from keras.layers import Add, Concatenate
 from keras.layers import UpSampling2D, Conv2DTranspose
 from keras.layers.normalization import BatchNormalization
 from PIL import Image
+from keras.preprocessing.image import ImageDataGenerator  
 
 from keras.optimizers import SGD
 
@@ -319,19 +320,22 @@ def CompileBinary(model):
 # Compile with the optimizer and the loss function
 def Compile(model, loss='weighted_categorical', weight_loss=None):
     if (loss == 'weighted_categorical'):
-        # loss_final = keras.losses.categorical_crossentropy
-        loss_final = WeightedCategoricalCrossEntropy(weight_loss)
+        loss_final = weighted_categorical_crossentropy(weight_loss)
         model.compile(optimizer='adam',
                   loss=loss_final,
-                  metrics=['accuracy'],
-                  # loss_weights=weight_loss
-                  )
+                  metrics=['accuracy', mean_dice])
+        
+    elif (loss == 'dice'):
+        loss_final = dice_loss
+        model.compile(optimizer='adam',
+                  loss=loss_final,
+                  metrics=['accuracy', mean_dice])
+        
     elif (loss == 'categorical_crossentropy'):
         loss_final = keras.losses.categorical_crossentropy
         model.compile(optimizer='adam',
                   loss=loss_final,
-                  metrics=['accuracy'],
-                  )
+                  metrics=['accuracy', mean_dice])
     return model
 
 def Train(model, X_train, Y_train, X_val, Y_val, batch_size=128, epochs=12):
@@ -410,6 +414,55 @@ def ToyModel(input_shape=(256, 256, 3), n_classes=3):
     model = Model(model_input, model_output)
     return model
 
+def ProcessData(validation_split=0.1, batch_size=128, data_augmentation=False, seed=None):
+    X_train, Y_train, X_test, Y_test = LoadData()
+    
+    basic_generator_args = dict(
+        validation_split=validation_split
+    )
+    
+    data_augmentation_generator_args = dict(
+    #     width_shift_range=0.3,
+    #     height_shift_range=0.3,
+        horizontal_flip=True,
+        vertical_flip=True,
+        zoom_range=0.2,
+        validation_split=validation_split
+    )
+    
+    if (seed is None):
+        seed = 1
+    
+    if (data_augmentation):
+        data_generator_args = data_augmentation_generator_args
+    else:
+        data_generator_args = basic_generator_args
+    
+    train_image_datagen = ImageDataGenerator(**data_generator_args)
+    train_label_datagen = ImageDataGenerator(**data_generator_args)
+    
+    training_image_generator = train_image_datagen.flow(
+        X_train,
+        subset='training', batch_size=batch_size, seed=1)
+    
+    training_masks_generator = train_label_datagen.flow(
+        Y_train,
+        subset='training', batch_size=batch_size, seed=1)
+    
+    train_gen = zip(training_image_generator, training_masks_generator)
+    
+    # Validation
+    validation_image_generator = train_image_datagen.flow(
+        X_train,
+        subset='validation', batch_size=batch_size, seed=1)
+    
+    validation_label_generator = train_label_datagen.flow(
+        Y_train,
+        subset='validation', batch_size=batch_size, seed=1)
+    
+    val_gen = zip(validation_image_generator, validation_label_generator)
+    
+
 def main():
     X_train, Y_train, X_test, Y_test = LoadData()
     
@@ -435,29 +488,29 @@ def main():
     # class_weights = np.array([1.0, 15.0, 90.0])
     # weight_loss = np.ones((256, 256, 3))*class_weights
     
-    class_weights = calculateLossWeights(Y_train)
-    # class_weights = np.array([1.0, 15.0, 84.0])
-    class_weights = np.array([1.0, 15.0, 90.0])
+    class_weights = calculateClassWeights(Y_train)
+    class_weights = np.array([6.0, 14.0, 78.0])
+    # class_weights = np.array([1.0, 1.0, 1.0])
     
     # print(weight_loss)
     
-    # unet = UNetClassic()
-    # print(unet.summary())
+    unet = UNetClassic()
+    print(unet.summary())
     
     # toymodel = ToyModel()
     # print(toymodel.summary())
     
-    # model = unet
+    model = unet
     
-    model = LoadModel(pretrainedUNet, 3)
+    # model = LoadModel(pretrainedUNet, 3)
     # model = UNetClassic()
     # model = LoadModel(savedUNet)
     # Compile(model, loss='weighted_categorical', weight_loss=class_weights)
-    Compile(model, loss='categorical_crossentropy', weight_loss=class_weights)
+    Compile(model, loss='weighted_categorical', weight_loss=class_weights)
     
     # Test(model, X_train[:1], Y_train[:1])
     
-    Train(model, X_train[:50], Y_train[:50], X_test, Y_test, batch_size=1, epochs=5)
+    Train(model, X_train[:], Y_train[:], X_test, Y_test, batch_size=1, epochs=5)
     
     model.save(tempUNet)
     # model.save(savedUNet)
