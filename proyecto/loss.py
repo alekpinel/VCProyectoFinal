@@ -41,7 +41,6 @@ def calculateClassWeights(masks):
     return np.sum(count_per_class)/count_per_class.astype(np.float32)
 
 
-
 # =============================================================================
 # Funciones de pérdida
 # =============================================================================
