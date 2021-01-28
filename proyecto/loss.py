@@ -7,28 +7,8 @@ Created on Tue Jan 19 12:22:51 2021
 """
 
 import numpy as np
-import math
-import keras
 import keras.backend as K
 import tensorflow as tf
-
-def calculateLossWeights(masks):
-    '''
-    Calculate a loss weight for each class inversely proportional to the
-    occurences of each class
-    '''
-    mask_width = masks.shape[2]
-    mask_height = masks.shape[1]
-    
-    count_per_class = np.sum(masks, axis=(0,1,2))
-    
-    # El peso de cada clase es inversamente porporcional a la proporción
-    # en la que aparezca
-    class_weights = np.sum(count_per_class)/count_per_class.astype(np.float64)
-    
-    # Replicamos los pesos al tamaño de la máscara original
-    # return np.ones((mask_height, mask_width, 3))*class_weights
-    return class_weights
 
 
 def calculateClassWeights(masks):
@@ -39,11 +19,29 @@ def calculateClassWeights(masks):
     count_per_class = np.sum(masks, axis=(0,1,2))          
     return np.max(count_per_class)/(count_per_class.astype(np.float32))
 
-# =============================================================================
-# Funciones de pérdida
-# =============================================================================
+# Por si hacemos algún tipo de prueba en el que haga falta que los pesos 
+# de cada clase se den como un diccionario.
+# def calculateClassWeights_dict(masks):
+#     '''
+#     Calculate a loss weight for each class inversely proportional to the
+#     occurences of each class
+#     '''    
+#     count_per_class = np.sum(masks, axis=(0,1,2))          
+#     weights = np.max(count_per_class)/(count_per_class.astype(np.float32))
+    
+#     class_weights = {}
+    
+#     for i in range(len(count_per_class)):
+#         class_weights[float(i)] = weights[i]
+        
+#     return class_weights
+        
 
-# WCCE OK
+# # =============================================================================
+# # Funciones de pérdida
+# # =============================================================================
+
+''' Definitivamente bien'''
 def weighted_categorical_crossentropy(weights):
     '''
     Weighted categorical cross-entropy loss function
@@ -78,72 +76,31 @@ def weighted_categorical_crossentropy(weights):
 
     return loss
 
-# def dice_coef(y_true, y_pred, smooth, thresh):
-#     y_pred = y_pred > thresh
-#     y_true_f = K.flatten(y_true)
-#     y_pred_f = K.flatten(y_pred)
-#     intersection = K.sum(y_true_f * y_pred_f)
 
-#     return (2. * intersection + smooth) / (K.sum(y_true_f) + K.sum(y_pred_f) + smooth)
-
-
-# def dice_loss(smooth, thresh):
-#   def dice(y_true, y_pred):
-#     return -dice_coef(y_true, y_pred, smooth, thresh)
-#   return dice
-
-
-
-def log_dice(y_true, y_pred, smooth=1):
-    return -K.log(dice(y_true, y_pred, smooth))
-
-
-def standard_dice(y_true, y_pred, smooth=1):
-    return 1 - dice(y_true, y_pred, smooth)
-
-
-def dice(y_true, y_pred, smooth=1):
-    intersection = K.sum(y_true * y_pred, axis=[1, 2, 3])
-    union = K.sum(y_true, axis=[1, 2, 3]) + K.sum(y_pred, axis=[1, 2, 3])
-    return K.mean((2. * intersection + smooth) / (union + smooth), axis=0)
-
-
-# # Dice creo que OK
-# def dice_loss(y_true, y_pred):
+# Dice creo que OK
+def dice_loss(y_true, y_pred):
     
-#     axes = (1,2) # W,H of each image
-#     smooth = 0.001 # avoid zero division in case of not present class
+    axes = (1,2) # W,H of each image
+    smooth = 0.001 # avoid zero division in case of not present class
     
-#     # TP
-#     intersection = K.sum(K.abs(y_true*y_pred), axis = axes)
+    # TP
+    intersection = K.sum(K.abs(y_true*y_pred), axis = axes)
     
-#     # 2TP + FP + FN
-#     mask_sum = K.sum(K.abs(y_true), axis=axes) + K.sum(K.abs(y_pred), axis=axes)
+    # 2TP + FP + FN
+    mask_sum = K.sum(K.abs(y_true), axis=axes) + K.sum(K.abs(y_pred), axis=axes)
     
-#     # Negative because keras will try to minimize
-#     # Another option: 1 - dice
-#     dice = - (2*intersection + smooth)/(mask_sum + smooth)
+    # Negative because keras will try to minimize
+    # Another option: 1 - dice
+    dice = - (2*intersection + smooth)/(mask_sum + smooth)
     
-#     # Mean only the represented classes
-#     mask = K.cast(K.not_equal(mask_sum, 0), 'float32')
-#     non_zero_count = K.sum(mask, axis = -1)
-#     non_zero_sum = K.sum(dice * mask, axis = -1)
-        
-#     # Creo que esto debería ser equivalente
-#     # return K.mean(non_zero_sum/non_zero_count)
+    # Mean only the represented classes
+    mask = K.cast(K.not_equal(mask_sum, 0), 'float32')
+    non_zero_count = K.sum(mask, axis = -1)
+    non_zero_sum = K.sum(dice * mask, axis = -1)
     
-#     # Devuelve Dice medio para cada imagen shape(batch,) 
-#     return non_zero_sum/non_zero_count
-    
-''' Uso '''
-# loss = weighted_categorical_crossentropy(weights)
-# model.compile(..., loss=loss)
-
-# Pruebas mías
-# loss = weighted_categorical_crossentropy(np.array([1,1,1]).astype(np.float32))
-# true = np.array([[[1,0,0],[0,1,0],[0,0,1]],[[1,0,0],[0,1,0],[0,0,1]],[[1,0,0],[0,1,0],[0,0,1]],[[1,0,0],[0,1,0],[0,0,1]]])[np.newaxis, :].astype(np.float32)
-# pred = np.array([[[1,0,0],[0,1,0],[0,0,1]],[[1,0,0],[0,1,0],[0,0,1]],[[1,0,0],[0,1,0],[0,0,1]],[[1,0,0],[0,1,0],[0,0,1]]])[np.newaxis, :].astype(np.float32)
-
+    # Devuelve Dice medio para cada imagen shape(batch,) 
+    # Puede que lo correcto sea aplicar mean
+    return non_zero_sum/non_zero_count
 
 
 ''' METRICAS '''
@@ -192,33 +149,48 @@ def mean_dice(y_true, y_pred):
     return seg_metrics(y_true, y_pred, metric_name='dice')
 
 
+import typing
 
-
-#####Seguramente borrar
-def WeightedCategoricalCrossEntropy(weights):
-    weights = K.variable(weights)
-        
-    def loss(y_true, y_pred):
-        # scale predictions so that the class probas of each sample sum to 1
-        y_pred /= K.sum(y_pred, axis=-1, keepdims=True)
-        # clip to prevent NaN's and Inf's
-        y_pred = K.clip(y_pred, K.epsilon(), 1 - K.epsilon())
-        # calc
-        loss = y_true * K.log(y_pred) * weights
-        loss = -K.sum(loss, -1)
+def weighted_loss(original_loss_function: typing.Callable, weights_list: dict) -> typing.Callable:
+    def loss_function(true, pred):
+        class_selectors = tf.cast(K.argmax(true, axis=-1), tf.int32)
+        class_selectors = [K.equal(i, class_selectors) for i in range(len(weights_list))]
+        class_selectors = [K.cast(x, K.floatx()) for x in class_selectors]
+        weights = [sel * w for sel, w in zip(class_selectors, weights_list)]
+        weight_multiplier = weights[0]
+        for i in range(1, len(weights)):
+            weight_multiplier = weight_multiplier + weights[i]
+        loss = original_loss_function(true, pred)
+        loss = loss * weight_multiplier
         return loss
-    
-    return loss
-    
-    # weights = np.array(weights)
-    # def loss(y_true, y_pred):
-    #     # scale predictions so that the class probas of each sample sum to 1
-    #     y_pred /= np.sum(y_pred, axis=-1, keepdims=True)
-    #     # clip to prevent NaN's and Inf's
-    #     y_pred = np.clip(y_pred, 0, 1)
-    #     # calc
-    #     loss = y_true * np.log(y_pred) * weights
-    #     loss = -np.sum(loss, -1)
-    #     return loss
-    
-    # return loss
+    return loss_function
+
+
+@tf.function
+def loss(y_true, y_pred, smooth=1, cat_weight=1, iou_weight=1, dice_weight=1):
+    return cat_weight * K.categorical_crossentropy(y_true, y_pred) \
+           + iou_weight * log_iou(y_true, y_pred, smooth) \
+           + dice_weight * log_dice(y_true, y_pred, smooth)
+
+@tf.function
+def log_iou(y_true, y_pred, smooth=1):
+    return - K.log(iou(y_true, y_pred, smooth))
+
+
+@tf.function
+def log_dice(y_true, y_pred, smooth=1):
+    return -K.log(dice(y_true, y_pred, smooth))
+
+
+@tf.function
+def iou(y_true, y_pred, smooth=1):
+    intersection = K.sum(K.abs(y_true * y_pred), axis=[1, 2, 3])
+    union = K.sum(y_true, [1, 2, 3]) + K.sum(y_pred, [1, 2, 3]) - intersection
+    return K.mean((intersection + smooth) / (union + smooth), axis=0)
+
+
+@tf.function
+def dice(y_true, y_pred, smooth=1):
+    intersection = K.sum(y_true * y_pred, axis=[1, 2, 3])
+    union = K.sum(y_true, axis=[1, 2, 3]) + K.sum(y_pred, axis=[1, 2, 3])
+    return K.mean((2. * intersection + smooth) / (union + smooth), axis=0)
