@@ -202,45 +202,6 @@ def GetGenerators(X_train, Y_train, X_test, Y_test, validation_split=0.1, batch_
     val_gen   = GenerateData(X_train, Y_train, data_generator_args, subset='validation', batch_size=batch_size, seed=seed)
     test_gen  = GenerateData(X_test, Y_test, test_args, batch_size=batch_size, seed=seed)
     
-    
-    # train_image_datagen = ImageDataGenerator(**data_augmentation_generator_args)
-    # train_masks_datagen = ImageDataGenerator(**data_augmentation_generator_args)
-    # test_image_datagen = ImageDataGenerator()
-    # test_masks_datagen = ImageDataGenerator()
-    
-    # # Training
-    # training_image_generator = train_image_datagen.flow(
-    #     X_train,
-    #     subset='training', batch_size=batch_size, seed=seed)
-    
-    # training_masks_generator = train_masks_datagen.flow(
-    #     Y_train,
-    #     subset='training', batch_size=batch_size, seed=seed)
-    
-    # train_gen = zip(training_image_generator, training_masks_generator)
-    
-    # # Validation
-    # validation_image_generator = train_image_datagen.flow(
-    #     X_train,
-    #     subset='validation', batch_size=batch_size, seed=seed)
-    
-    # validation_label_generator = train_masks_datagen.flow(
-    #     Y_train,
-    #     subset='validation', batch_size=batch_size, seed=seed)
-    
-    # val_gen = zip(validation_image_generator, validation_label_generator)
-    
-    # # Test
-    # test_image_generator = test_image_datagen.flow(
-    #     X_test,
-    #     batch_size=batch_size, seed=seed)
-    
-    # test_label_generator = test_masks_datagen.flow(
-    #     Y_test,
-    #     batch_size=batch_size, seed=seed)
-    
-    # test_gen = zip(test_image_generator, test_label_generator)
-    
     return train_gen, val_gen, test_gen, data_generator_args, test_args
     
 def GenerateData(X, Y, generator_args=None, subset=None, batch_size=4, seed=None):
@@ -389,6 +350,7 @@ def UNetV2(input_shape=(256, 256, 3), n_classes=3):
     #Layer of decoder, upsampling, conv, concatenation and 2 convs
     def DecoderLayer(filters, x, skip):
         x = UpSampling2D(size=(2,2))(x)
+        # x = Conv2DTranspose(filters, (3, 3), strides=(2, 2), activation='relu', padding='same')(x)
         x = Concatenate()([x, skip])
         # x = BatchNormalization()(x)
         x = Conv2DTranspose(filters, (3, 3), activation='relu', padding='same')(x)
@@ -455,21 +417,6 @@ def UNetV3(input_shape=(256, 256, 3), n_classes=3):
     #Input
     x = Input(input_shape)
     model_input = x
-    
-    # #Encoder
-    # x, encoder1 = EncoderLayer(32,  x)
-    # x, encoder2 = EncoderLayer(64, x)
-    # x, encoder3 = EncoderLayer(128, x)
-    # x, encoder4 = EncoderLayer(256, x)
-    
-    # #Centre
-    # x = Conv2D(512, (3, 3), activation='relu', padding='same')(x)
-    
-    # #Decoder
-    # x = DecoderLayer(256, x, encoder4)
-    # x = DecoderLayer(128, x, encoder3)
-    # x = DecoderLayer(64, x, encoder2)
-    # x = DecoderLayer(32,  x, encoder1)
     
     #Encoder
     x, encoder1 = EncoderLayer(32,  x)
@@ -663,18 +610,6 @@ def LoadModel(pathtosave, n_classes=None):
         model = AdjustModel(model, n_classes)
     return model
 
-def ToyModel(input_shape=(256, 256, 3), n_classes=3):
-    #Input
-    x = Input(input_shape)
-    model_input = x
-    
-    x = Conv2D(64, (3, 3), activation='relu', padding='same')(x)
-    
-    x = Conv2D(n_classes, (1, 1), activation='softmax', padding='same')(x)
-    model_output = x
-    model = Model(model_input, model_output)
-    return model
-
 
 def main():
     
@@ -752,6 +687,29 @@ def main():
         print(experimentalResults)
         PlotBars(experimentalResults, "Loss funcion", "Dice")
     
+    ############################# UNET CLASSIC ##############################################
+    def UnetClassicTest():
+        unet = LoadModel(pretrainedUNet, 3)
+        Compile(unet, loss='categorical_crossentropy')
+        print(unet.summary())
+        Experiment("Unet", unet, useCrossValidation=False, steps_per_epoch=100, epochs=30)
+        
+        unet.save(savedUNet)
+        Test(unet, X_test, Y_test)
+    
+    unetv2 = UNetV3()
+    # Compile(unetv2, loss='weighted_categorical', weight_loss=class_weights)
+    Compile(unetv2, loss='categorical_crossentropy')
+    print(unetv2.summary())
+    # PreTrain(unetv2, pretrainedUNetv2, name="UNet v2")
+    Experiment("Unet v2", unetv2, useCrossValidation=False, steps_per_epoch=100, epochs=30)
+    
+    unetv2.save(savedUNetv2)
+    
+    Test(unetv2, X_test, Y_test)
+    
+    return 0
+    
     # for i in range(10):
     #     test_imgs, labels = val_gen.__next__()
     #     visualize(test_imgs[0], labels[0])
@@ -780,6 +738,8 @@ def main():
     Test(unetv2, X_test, Y_test)
     
     experimentalResults.append((f'UNetv2 CC: 0.5971%', 0.5971))
+    
+    
     
     return 0
     
