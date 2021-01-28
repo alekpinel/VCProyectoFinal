@@ -401,6 +401,63 @@ def UNetV2(input_shape=(256, 256, 3), n_classes=3):
     model = Model(model_input, model_output)
     return model
 
+
+# Added BatchNormalization into classic Unet
+def UNetV3(input_shape=(256, 256, 3), n_classes=3):
+    #Layer of encoder: 2 convs and pooling
+    def EncoderLayer(filters, x):
+        # x = BatchNormalization()(x)
+        x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
+        x = (BatchNormalization())(x)
+        x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
+        x = (BatchNormalization())(x)
+        feature_layer = x
+        x = MaxPooling2D()(x)
+        return x, feature_layer
+    #Layer of decoder, upsampling, conv, concatenation and 2 convs
+    def DecoderLayer(filters, x, skip):
+        x = UpSampling2D(size=(2,2))(x)
+        x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
+        x = (BatchNormalization())(x)
+        x = Concatenate()([x, skip])
+        # x = BatchNormalization()(x)
+        x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
+        x = (BatchNormalization())(x)
+        x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
+        x = (BatchNormalization())(x)
+        return x
+    
+    #Input
+    x = Input(input_shape)
+    model_input = x
+    
+    #Encoder
+    x, encoder1 = EncoderLayer(64,  x)
+    x, encoder2 = EncoderLayer(128, x)
+    x, encoder3 = EncoderLayer(256, x)
+    x, encoder4 = EncoderLayer(512, x)
+    
+    #Centre
+    x = Conv2D(1024, (3, 3), activation='relu', padding='same')(x)
+    
+    #Decoder
+    x = DecoderLayer(512, x, encoder4)
+    x = DecoderLayer(256, x, encoder3)
+    x = DecoderLayer(128, x, encoder2)
+    x = DecoderLayer(64,  x, encoder1)
+    
+    #Output
+    if (n_classes == 1):
+        x = Conv2D(n_classes, (1, 1), activation='sigmoid', padding='same')(x)
+    else:
+        x = Conv2D(n_classes, (1, 1), activation='softmax', padding='same')(x)
+        
+    model_output = x
+    
+    model = Model(model_input, model_output)
+    return model
+
+
 #Compile for binary data (pretraining)
 def CompileBinary(model):
     loss = keras.losses.binary_crossentropy
