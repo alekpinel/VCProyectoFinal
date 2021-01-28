@@ -200,7 +200,7 @@ def GetGenerators(X_train, Y_train, X_test, Y_test, validation_split=0.1, batch_
         
     train_gen = GenerateData(X_train, Y_train, data_generator_args, subset='training', batch_size=batch_size, seed=seed)
     val_gen   = GenerateData(X_train, Y_train, data_generator_args, subset='validation', batch_size=batch_size, seed=seed)
-    test_gen  = GenerateData(X_test, Y_test, test_args, subset='validation', batch_size=batch_size, seed=seed)
+    test_gen  = GenerateData(X_test, Y_test, test_args, batch_size=batch_size, seed=seed)
     
     
     # train_image_datagen = ImageDataGenerator(**data_augmentation_generator_args)
@@ -470,21 +470,25 @@ def UNetV3(input_shape=(256, 256, 3), n_classes=3):
     
     #Encoder
     x, encoder1 = EncoderLayer(32,  x)
-    x, encoder2 = EncoderLayer(64, x)
+    x, encoder2 = EncoderLayer(32, x)
     x, encoder3 = EncoderLayer(64, x)
-    x, encoder4 = EncoderLayer(128, x)
+    x, encoder4 = EncoderLayer(64, x)
     x, encoder5 = EncoderLayer(128, x)
-    x, encoder6 = EncoderLayer(256, x)
+    x, encoder6 = EncoderLayer(128, x)
+    x, encoder7 = EncoderLayer(256, x)
+    x, encoder8 = EncoderLayer(256, x)
     
     #Centre
     x = Conv2D(512, (3, 3), activation='relu', padding='same')(x)
     x = Conv2D(512, (3, 3), activation='relu', padding='same')(x)
     
-    x = DecoderLayer(256, x, encoder6)
+    x = DecoderLayer(256, x, encoder8)
+    x = DecoderLayer(256, x, encoder7)
+    x = DecoderLayer(128, x, encoder6)
     x = DecoderLayer(128, x, encoder5)
-    x = DecoderLayer(128, x, encoder4)
+    x = DecoderLayer(64, x, encoder4)
     x = DecoderLayer(64, x, encoder3)
-    x = DecoderLayer(64, x, encoder2)
+    x = DecoderLayer(32, x, encoder2)
     x = DecoderLayer(32,  x, encoder1)
     
     #Output
@@ -652,6 +656,8 @@ def PreTrain(model, pathtosave, name=""):
     ShowEvolution(name, hist)
     
     model.save(pathtosave)
+    
+    return model
 
 #Load a model from memory. If n_classes is provided, the output layer is changed accordingly
 def LoadModel(pathtosave, n_classes=None):
