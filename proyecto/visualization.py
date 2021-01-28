@@ -124,3 +124,23 @@ def PlotBars(data, title=None, y_label=None):
     else:
         plt.bar(x, y)
     plt.show()
+    
+    
+#Plot a graphic with values in the form (x, y)
+def PlotResults(data, title, y_label):
+    strings = [i[0] for i in data]
+    x = [i for i in range(len(data))]
+    y = [i[1] for i in data]
+    
+     
+    fig, ax = plt.subplots()
+    ax.set_title(title)
+    ax.set_ylabel(y_label)
+    
+    fig.autofmt_xdate()
+    
+    x_labels=strings
+    plt.xticks(x, x_labels)
+    
+    plt.bar(x, y)
+    plt.show()

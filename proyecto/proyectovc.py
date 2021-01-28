@@ -170,19 +170,20 @@ def LoadPretrainingData(target_size=(256, 256)):
     return X_train, Y_train, X_test, Y_test
     
 #Get the generators from raw data
-def GetGenerators(X_train, Y_train, X_test, Y_test, validation_split=0.1, batch_size=128, data_augmentation=False, seed=None):
+def GetGenerators(X_train, Y_train, X_test, Y_test, validation_split=0.1, batch_size=128, data_augmentation=False, seed=None,
+                  shift_range=0.1, rotation_range=5, flip=True, zoom_range=0.2):
     basic_generator_args = dict(
         validation_split=validation_split
     )
     
     data_augmentation_generator_args = dict(
-        width_shift_range=0.1,
-        height_shift_range=0.1,
-        rotation_range=5,
+        width_shift_range=shift_range,
+        height_shift_range=shift_range,
+        rotation_range=rotation_range,
         
-        horizontal_flip=True,
-        vertical_flip=True,
-        zoom_range=0.2,
+        horizontal_flip=flip,
+        vertical_flip=flip,
+        zoom_range=zoom_range,
         validation_split=validation_split
     )
     
@@ -437,8 +438,11 @@ def Train(model, train_gen, val_gen, steps_per_epoch=100, batch_size=1, epochs=1
                         verbose=1,
                         validation_data=val_gen,
                         steps_per_epoch=steps_per_epoch,
-                        validation_steps=9)
-    return hist
+                        validation_steps=16)
+    
+    results = [hist.history['val_accuracy'], hist.history['val_mean_dice']]
+    
+    return hist, results
 
 def Test(model, X_test, Y_test):
     predicciones = model.predict(X_test)
@@ -526,6 +530,38 @@ def main():
                                                   data_augmentation=True,
                                                   batch_size=4)
     
+    experimentalResults = []
+    
+    def Experiment(name, model, epochs=5, add_results=True):
+        steps_per_epoch = 400
+        hist, results = Train(model, train_gen, val_gen, steps_per_epoch=steps_per_epoch, batch_size=1, epochs=epochs)
+        
+        ShowEvolution(name, hist)
+        
+        #Add results 
+        if (add_results):
+            accuracy_four_decimals = format(results[0], '.4f')
+            dice_four_decimals = format(results[1], '.4f')
+            experimentalResults.append((f'{name} {dice_four_decimals}', dice_four_decimals))
+        print(f"{name}: Accuracy = {accuracy_four_decimals} Dice = {dice_four_decimals}")
+    
+    ############################# DATA AUGMENTATION ##############################################
+    
+    # Experiment with the shifts
+    shifts = [0.05, 0.1, 0.2]
+    for i in shifts:
+        model = LoadModel(pretrainedUNetv2, 3)
+        Compile(model, loss='categorical_crossentropy')
+        
+        train_gen, val_gen, test_gen = GetGenerators(X_train, Y_train, X_test, Y_test, data_augmentation=True, batch_size=4,
+                                                     shift_range=i)
+        Experiment(f"Shift {i}", model, epochs = 1)
+        
+    
+    PlotResults(experimentalResults, "Shifts", "Accuracies")
+    
+    return 0
+    
     # test_imgs, labels = train_gen.__next__()
     # print(len(test_imgs))
     
@@ -550,7 +586,7 @@ def main():
     # return 0
     
     class_weights = calculateClassWeights(Y_train)
-    # class_weights = np.sqrt(class_weights)
+    class_weights = np.sqrt(class_weights)
     # class_weights = np.array([6.0, 14.0, 78.0])
     # class_weights = np.array([1.0, 1.0, 1.0])
     # class_weights = np.array([10.0, 12.0, 76.0])
@@ -563,16 +599,16 @@ def main():
     
     print(model.summary())
     
-    Compile(model, loss='categorical_crossentropy')
+    # Compile(model, loss='categorical_crossentropy')
     # Compile(model, loss='dice')
-    # Compile(model, loss='weighted_categorical', weight_loss=class_weights)
+    Compile(model, loss='weighted_categorical', weight_loss=class_weights)
     
     # Test(model, X_train[:1], Y_train[:1])
     
     steps_per_epoch = 400
-    epochs = 20
+    epochs = 10
     
-    hist = Train(model, train_gen, val_gen, steps_per_epoch=steps_per_epoch, batch_size=1, epochs=epochs)
+    hist, _ = Train(model, train_gen, val_gen, steps_per_epoch=steps_per_epoch, batch_size=1, epochs=epochs)
     
     ShowEvolution("UNet", hist)
     
@@ -595,6 +631,9 @@ def main():
     # model = keras.models.load_model(savedmodelspath + 'UNet.h5')
     # acc = Test(model, X_test, Y_test)
     # print(f"Accuracy is: {acc}")
+    
+    
+    
     
     
 

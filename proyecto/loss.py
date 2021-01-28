@@ -9,6 +9,7 @@ Created on Tue Jan 19 12:22:51 2021
 import numpy as np
 import keras.backend as K
 import tensorflow as tf
+import typing
 
 
 def calculateClassWeights(masks):
@@ -149,7 +150,7 @@ def mean_dice(y_true, y_pred):
     return seg_metrics(y_true, y_pred, metric_name='dice')
 
 
-import typing
+
 
 def weighted_loss(original_loss_function: typing.Callable, weights_list: dict) -> typing.Callable:
     def loss_function(true, pred):
