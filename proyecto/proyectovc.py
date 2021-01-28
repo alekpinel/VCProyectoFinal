@@ -517,7 +517,7 @@ def Compile(model, loss='categorical_crossentropy', weight_loss=None):
                   metrics=['accuracy', mean_dice])
         
     elif (loss == 'dice'):
-        loss_final = standard_dice
+        loss_final = dice_loss
         model.compile(optimizer='adam',
                   loss=loss_final,
                   metrics=['accuracy', mean_dice])
@@ -738,6 +738,19 @@ def main():
         
         PlotBars(experimentalResults, "Pre-trained", "Dice")
         
+    ############################# LOSS FUNCTIONS ##############################################
+    def lossFunctionsTests():
+        weights = calculateClassWeights(Y_train)
+        print(weights)
+        # Experiment with the shifts
+        losses = ['weighted_categorical', 'dice', 'categorical_crossentropy']
+        for l in losses:
+          model = UNetClassic()
+          Compile(model, loss=l, weight_loss = weights)
+          _,_,_, TrainArgs, TestArgs = GetGenerators(X_train, Y_train, X_test, Y_test, batch_size=4)
+          Experiment(f"Loss {l}", model, TrainArgs_=TrainArgs, steps_per_epoch=100, epochs = 5, loss =  l, weight_loss=weights)
+        print(experimentalResults)
+        PlotBars(experimentalResults, "Loss funcion", "Dice")
     
     # for i in range(10):
     #     test_imgs, labels = val_gen.__next__()
