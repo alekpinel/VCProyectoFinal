@@ -432,14 +432,11 @@ def UNetV3(input_shape=(256, 256, 3), n_classes=3):
     #Layer of encoder: 2 convs and pooling
     def EncoderLayer(filters, x):
         x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
-        # x = (BatchNormalization())(x)
-        # x = Dropout(0.2)(x)
         x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
-        # x = (BatchNormalization())(x)
-        # x = Dropout(0.2)(x)
         feature_layer = x
         x = MaxPooling2D()(x)
         return x, feature_layer
+    
     #Layer of decoder, upsampling, conv, concatenation and 2 convs
     def DecoderLayer(filters, x, skip):
         x = UpSampling2D(size=(2,2))(x)
@@ -472,18 +469,23 @@ def UNetV3(input_shape=(256, 256, 3), n_classes=3):
     # x = DecoderLayer(32,  x, encoder1)
     
     #Encoder
-    x, encoder1 = EncoderLayer(64,  x)
-    x, encoder2 = EncoderLayer(128, x)
-    x, encoder3 = EncoderLayer(256, x)
-    x, encoder4 = EncoderLayer(512, x)
+    x, encoder1 = EncoderLayer(32,  x)
+    x, encoder2 = EncoderLayer(64, x)
+    x, encoder3 = EncoderLayer(64, x)
+    x, encoder4 = EncoderLayer(128, x)
+    x, encoder5 = EncoderLayer(128, x)
+    x, encoder6 = EncoderLayer(256, x)
     
     #Centre
-    x = Conv2D(1024, (3, 3), activation='relu', padding='same')(x)
+    x = Conv2D(512, (3, 3), activation='relu', padding='same')(x)
+    x = Conv2D(512, (3, 3), activation='relu', padding='same')(x)
     
-    x = DecoderLayer(512, x, encoder4)
-    x = DecoderLayer(256, x, encoder3)
-    x = DecoderLayer(128, x, encoder2)
-    x = DecoderLayer(64,  x, encoder1)
+    x = DecoderLayer(256, x, encoder6)
+    x = DecoderLayer(128, x, encoder5)
+    x = DecoderLayer(128, x, encoder4)
+    x = DecoderLayer(64, x, encoder3)
+    x = DecoderLayer(64, x, encoder2)
+    x = DecoderLayer(32,  x, encoder1)
     
     #Output
     if (n_classes == 1):
@@ -741,22 +743,26 @@ def main():
     # ClassPercentage(Y_train)
     
     # DataAugmentationTests()
-    PreTrainingTests()
+    # PreTrainingTests()
     
-    return 0
+    # return 0
     
     class_weights = calculateClassWeights(Y_train)
     
     unetv2 = UNetV3()
-    Compile(unetv2, loss='weighted_categorical', weight_loss=class_weights)
-    # Compile(unetv2, loss='categorical_crossentropy')
-    # print(unetv2.summary())
+    # Compile(unetv2, loss='weighted_categorical', weight_loss=class_weights)
+    Compile(unetv2, loss='categorical_crossentropy')
+    print(unetv2.summary())
     # PreTrain(unetv2, pretrainedUNetv2, name="UNet v2")
-    Experiment("Unet v2", unetv2, useCrossValidation=False, steps_per_epoch=50, epochs=12)
+    Experiment("Unet v2", unetv2, useCrossValidation=False, steps_per_epoch=100, epochs=30)
+    
+    unetv2.save(savedUNetv2)
+    
     Test(unetv2, X_test, Y_test)
     
     experimentalResults.append((f'UNetv2 CC: 0.5971%', 0.5971))
     
+    return 0
     
     # test_imgs, labels = train_gen.__next__()
     # print(len(test_imgs))
