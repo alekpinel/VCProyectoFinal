@@ -11,6 +11,7 @@ savedmodelspath = "./saves/"
 pretrainedUNet = savedmodelspath + "PretrainedUNet.h5"
 pretrainedUNetv2 = savedmodelspath + "PretrainedUNetv2.h5"
 savedUNet = savedmodelspath + "SavedUNet.h5"
+savedUNetv2 = savedmodelspath + "SavedUNetv2.h5"
 tempUNet = savedmodelspath + "TempUNet.h5"
 
 import keras
@@ -520,23 +521,10 @@ def ToyModel(input_shape=(256, 256, 3), n_classes=3):
 
 def main():
     
-    w_list = {0.0: 1.0, 1.0:7.0, 2.0:89.0}
-    numbers = [i + 1 for i in range(10)]
-    
-    print(f"numbers: {numbers}")
-    
-    print(f"w_list: {w_list}")
-    
-    for n, w in zip(numbers, w_list):
-        print(f"n:{n} w:{w_list[w]}")
-    
-    return 0
-    
     X_train, Y_train, X_test, Y_test = LoadData()
     train_gen, val_gen, test_gen = GetGenerators(X_train, Y_train, X_test, Y_test,
                                                   data_augmentation=True,
                                                   batch_size=4)
-    
     
     # test_imgs, labels = train_gen.__next__()
     # print(len(test_imgs))
@@ -575,19 +563,21 @@ def main():
     
     print(model.summary())
     
-    # Compile(model, loss='categorical_crossentropy')
-    Compile(model, loss='weighted_categorical', weight_loss=class_weights)
+    Compile(model, loss='categorical_crossentropy')
+    # Compile(model, loss='dice')
+    # Compile(model, loss='weighted_categorical', weight_loss=class_weights)
     
     # Test(model, X_train[:1], Y_train[:1])
     
-    steps_per_epoch = 100
+    steps_per_epoch = 400
+    epochs = 20
     
-    hist = Train(model, train_gen, val_gen, steps_per_epoch=steps_per_epoch, batch_size=1, epochs=10)
+    hist = Train(model, train_gen, val_gen, steps_per_epoch=steps_per_epoch, batch_size=1, epochs=epochs)
     
     ShowEvolution("UNet", hist)
     
     # model.save(tempUNet)
-    # model.save(savedUNet)
+    model.save(savedUNetv2)
     
     print(f"Class Weights: {class_weights}")
     Test(model, X_train[:5], Y_train[:5])
