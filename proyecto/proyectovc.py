@@ -433,6 +433,7 @@ def UNetV3(input_shape=(256, 256, 3), n_classes=3):
     def EncoderLayer(filters, x):
         x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
         x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
+        x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
         feature_layer = x
         x = MaxPooling2D()(x)
         return x, feature_layer
@@ -442,6 +443,8 @@ def UNetV3(input_shape=(256, 256, 3), n_classes=3):
         x = UpSampling2D(size=(2,2))(x)
         x = (BatchNormalization())(x)
         x = Concatenate()([x, skip])
+        x = Conv2DTranspose(filters, (3, 3), activation='relu', padding='same')(x)
+        x = (BatchNormalization())(x)
         x = Conv2DTranspose(filters, (3, 3), activation='relu', padding='same')(x)
         x = (BatchNormalization())(x)
         x = Conv2DTranspose(filters, (3, 3), activation='relu', padding='same')(x)
@@ -470,25 +473,19 @@ def UNetV3(input_shape=(256, 256, 3), n_classes=3):
     
     #Encoder
     x, encoder1 = EncoderLayer(32,  x)
-    x, encoder2 = EncoderLayer(32, x)
+    x, encoder2 = EncoderLayer(64, x)
     x, encoder3 = EncoderLayer(64, x)
-    x, encoder4 = EncoderLayer(64, x)
-    x, encoder5 = EncoderLayer(128, x)
-    x, encoder6 = EncoderLayer(128, x)
-    x, encoder7 = EncoderLayer(256, x)
-    x, encoder8 = EncoderLayer(256, x)
+    x, encoder4 = EncoderLayer(128, x)
+    x, encoder5 = EncoderLayer(256, x)
     
     #Centre
     x = Conv2D(512, (3, 3), activation='relu', padding='same')(x)
     x = Conv2D(512, (3, 3), activation='relu', padding='same')(x)
     
-    x = DecoderLayer(256, x, encoder8)
-    x = DecoderLayer(256, x, encoder7)
-    x = DecoderLayer(128, x, encoder6)
-    x = DecoderLayer(128, x, encoder5)
-    x = DecoderLayer(64, x, encoder4)
+    x = DecoderLayer(256, x, encoder5)
+    x = DecoderLayer(128, x, encoder4)
     x = DecoderLayer(64, x, encoder3)
-    x = DecoderLayer(32, x, encoder2)
+    x = DecoderLayer(64, x, encoder2)
     x = DecoderLayer(32,  x, encoder1)
     
     #Output
@@ -752,6 +749,9 @@ def main():
     # PreTrainingTests()
     
     # return 0
+    
+    # model = PreTrain(model, "path", name="UNet v2")
+    # model = AdjustModel(model, 3)
     
     class_weights = calculateClassWeights(Y_train)
     
