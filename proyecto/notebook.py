@@ -20,10 +20,13 @@ from loss import *
 
 IMAGE_HEIGHT = 256
 IMAGE_WIDTH = 256
-BATCH_SIZE = 16
+BATCH_SIZE = 1
 NUM_CLASSES = 3
 # IMG_PATH = './notebookdata/images/'
 # MASK_PATH = './notebookdata/masks/'
+
+#The local GPU used to run out of memory, so we limited the memory usage:
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
 # DATA_PATH = '../data/'
 
@@ -304,8 +307,8 @@ tf.keras.utils.plot_model(model, show_shapes=True)
 print(model.summary())
 
 model_history = model.fit(train_generator,
-                          epochs=5,
-                          steps_per_epoch=100,
+                          epochs=20,
+                          steps_per_epoch=1600,
                           validation_data=validation_generator,
                           validation_steps=9)
 

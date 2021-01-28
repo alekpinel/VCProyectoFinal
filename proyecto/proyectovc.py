@@ -170,7 +170,7 @@ def LoadPretrainingData(target_size=(256, 256)):
     
     return X_train, Y_train, X_test, Y_test
     
-#Get the generators from raw data
+#Get the generators from raw data and the arguments to make them
 def GetGenerators(X_train, Y_train, X_test, Y_test, validation_split=0.1, batch_size=128, data_augmentation=False, seed=None,
                   shift_range=0.1, rotation_range=5, flip=True, zoom_range=0.2):
     basic_generator_args = dict(
@@ -197,44 +197,49 @@ def GetGenerators(X_train, Y_train, X_test, Y_test, validation_split=0.1, batch_
         data_generator_args = data_augmentation_generator_args
     else:
         data_generator_args = basic_generator_args
+        
+    train_gen = GenerateData(X_train, Y_train, data_generator_args, subset='training', batch_size=batch_size, seed=seed)
+    val_gen   = GenerateData(X_train, Y_train, data_generator_args, subset='validation', batch_size=batch_size, seed=seed)
+    test_gen  = GenerateData(X_test, Y_test, test_args, subset='validation', batch_size=batch_size, seed=seed)
     
-    train_image_datagen = ImageDataGenerator(**data_augmentation_generator_args)
-    train_masks_datagen = ImageDataGenerator(**data_augmentation_generator_args)
-    test_image_datagen = ImageDataGenerator()
-    test_masks_datagen = ImageDataGenerator()
     
-    # Training
-    training_image_generator = train_image_datagen.flow(
-        X_train,
-        subset='training', batch_size=batch_size, seed=seed)
+    # train_image_datagen = ImageDataGenerator(**data_augmentation_generator_args)
+    # train_masks_datagen = ImageDataGenerator(**data_augmentation_generator_args)
+    # test_image_datagen = ImageDataGenerator()
+    # test_masks_datagen = ImageDataGenerator()
     
-    training_masks_generator = train_masks_datagen.flow(
-        Y_train,
-        subset='training', batch_size=batch_size, seed=seed)
+    # # Training
+    # training_image_generator = train_image_datagen.flow(
+    #     X_train,
+    #     subset='training', batch_size=batch_size, seed=seed)
     
-    train_gen = zip(training_image_generator, training_masks_generator)
+    # training_masks_generator = train_masks_datagen.flow(
+    #     Y_train,
+    #     subset='training', batch_size=batch_size, seed=seed)
     
-    # Validation
-    validation_image_generator = train_image_datagen.flow(
-        X_train,
-        subset='validation', batch_size=batch_size, seed=seed)
+    # train_gen = zip(training_image_generator, training_masks_generator)
     
-    validation_label_generator = train_masks_datagen.flow(
-        Y_train,
-        subset='validation', batch_size=batch_size, seed=seed)
+    # # Validation
+    # validation_image_generator = train_image_datagen.flow(
+    #     X_train,
+    #     subset='validation', batch_size=batch_size, seed=seed)
     
-    val_gen = zip(validation_image_generator, validation_label_generator)
+    # validation_label_generator = train_masks_datagen.flow(
+    #     Y_train,
+    #     subset='validation', batch_size=batch_size, seed=seed)
     
-    # Test
-    test_image_generator = test_image_datagen.flow(
-        X_test,
-        batch_size=batch_size, seed=seed)
+    # val_gen = zip(validation_image_generator, validation_label_generator)
     
-    test_label_generator = test_masks_datagen.flow(
-        Y_test,
-        batch_size=batch_size, seed=seed)
+    # # Test
+    # test_image_generator = test_image_datagen.flow(
+    #     X_test,
+    #     batch_size=batch_size, seed=seed)
     
-    test_gen = zip(test_image_generator, test_label_generator)
+    # test_label_generator = test_masks_datagen.flow(
+    #     Y_test,
+    #     batch_size=batch_size, seed=seed)
+    
+    # test_gen = zip(test_image_generator, test_label_generator)
     
     return train_gen, val_gen, test_gen, data_generator_args, test_args
     
@@ -371,7 +376,7 @@ def UNetClassic(input_shape=(256, 256, 3), n_classes=3):
     model = Model(model_input, model_output)
     return model
 
-#Classic implementation of UNet
+#Implementation of UNet with less parameters and Conv2DTranspose (not used in experiments)
 def UNetV2(input_shape=(256, 256, 3), n_classes=3):
     #Layer of encoder: 2 convs and pooling
     def EncoderLayer(filters, x):
@@ -427,10 +432,11 @@ def UNetV3(input_shape=(256, 256, 3), n_classes=3):
     #Layer of encoder: 2 convs and pooling
     def EncoderLayer(filters, x):
         x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
-        x = (BatchNormalization())(x)
+        # x = (BatchNormalization())(x)
+        # x = Dropout(0.2)(x)
         x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
-        x = (BatchNormalization())(x)
-        x = Dropout(0.2)(x)
+        # x = (BatchNormalization())(x)
+        # x = Dropout(0.2)(x)
         feature_layer = x
         x = MaxPooling2D()(x)
         return x, feature_layer
@@ -450,6 +456,21 @@ def UNetV3(input_shape=(256, 256, 3), n_classes=3):
     x = Input(input_shape)
     model_input = x
     
+    # #Encoder
+    # x, encoder1 = EncoderLayer(32,  x)
+    # x, encoder2 = EncoderLayer(64, x)
+    # x, encoder3 = EncoderLayer(128, x)
+    # x, encoder4 = EncoderLayer(256, x)
+    
+    # #Centre
+    # x = Conv2D(512, (3, 3), activation='relu', padding='same')(x)
+    
+    # #Decoder
+    # x = DecoderLayer(256, x, encoder4)
+    # x = DecoderLayer(128, x, encoder3)
+    # x = DecoderLayer(64, x, encoder2)
+    # x = DecoderLayer(32,  x, encoder1)
+    
     #Encoder
     x, encoder1 = EncoderLayer(64,  x)
     x, encoder2 = EncoderLayer(128, x)
@@ -459,7 +480,6 @@ def UNetV3(input_shape=(256, 256, 3), n_classes=3):
     #Centre
     x = Conv2D(1024, (3, 3), activation='relu', padding='same')(x)
     
-    #Decoder
     x = DecoderLayer(512, x, encoder4)
     x = DecoderLayer(256, x, encoder3)
     x = DecoderLayer(128, x, encoder2)
@@ -486,7 +506,7 @@ def CompileBinary(model):
 
 
 # Compile with the optimizer and the loss function
-def Compile(model, loss='weighted_categorical', weight_loss=None):
+def Compile(model, loss='categorical_crossentropy', weight_loss=None):
     if (loss == 'weighted_categorical'):
         loss_final = weighted_categorical_crossentropy(weight_loss)
         model.compile(optimizer='adam',
@@ -523,8 +543,6 @@ def Train(model, train_gen, val_gen, steps_per_epoch=100, batch_size=1, epochs=1
 def CrossValidation(model, train_data, train_labels, TrainArgs, ValArgs, 
                     loss='categorical_crossentropy', weight_loss=None,
                     steps_per_epoch=100, n_splits=3, epochs=12, batch_size=1):
-    #debug
-    train_data_fold = GenerateData(train_data, train_labels, TrainArgs)
     
     kfold = KFold(n_splits=n_splits, shuffle=True, random_state=42)
     Grupo = 0
@@ -574,20 +592,21 @@ def CrossValidation(model, train_data, train_labels, TrainArgs, ValArgs,
     return historials[best_network], results
 
 def Test(model, X_test, Y_test):
-    predicciones = model.predict(X_test)
+    predicciones = model.predict(X_test, batch_size=4)
     labels = np.argmax(Y_test, axis = -1)
     preds = np.argmax(predicciones, axis = -1)
     
     print(f"Y_test: {Y_test.shape} labels: {labels.shape} predicciones: mask: {predicciones.shape} {preds.shape}")
     
     accuracy = sum(labels.reshape((-1,)) == preds.reshape((-1,)))/len(labels.reshape((-1,)))
+    dice = mean_dice(Y_test, predicciones)
     
-    print(f"Accuracy={accuracy}")
+    print(f"Accuracy={accuracy} Dice={dice}")
     
-    for i in range(len(X_test)):
-        print(f"Maximos Background {np.max(predicciones[i,:,:,0].reshape((-1,)))}")
-        print(f"Maximos Blood cells {np.max(predicciones[i,:,:,1].reshape((-1,)))}")
-        print(f"Maximos Bacteries {np.max(predicciones[i,:,:,2].reshape((-1,)))}")
+    for i in range(min(len(X_test), 5)):
+        # print(f"Maximos Background {np.max(predicciones[i,:,:,0].reshape((-1,)))}")
+        # print(f"Maximos Blood cells {np.max(predicciones[i,:,:,1].reshape((-1,)))}")
+        # print(f"Maximos Bacteries {np.max(predicciones[i,:,:,2].reshape((-1,)))}")
         
         ShowImage(predicciones[i,:,:,0], "Background")
         ShowImage(predicciones[i,:,:,1], "Blood cells")
@@ -623,7 +642,7 @@ def PreTrain(model, pathtosave, name=""):
     
     hist = model.fit(X_train, Y_train,
                         batch_size=4,
-                        epochs=30,
+                        epochs=10,
                         verbose=1,
                         validation_data=(X_test, Y_test))
     
@@ -656,21 +675,23 @@ def main():
     
     X_train, Y_train, X_test, Y_test = LoadData()
     train_gen, val_gen, test_gen, TrainArgs, TestArgs = GetGenerators(
-        X_train, Y_train, X_test, Y_test, data_augmentation=True, batch_size=2)
+        X_train, Y_train, X_test, Y_test, data_augmentation=True, batch_size=4)
     # ClassPercentage(Y_train, dateformat=False)
     
     experimentalResults = []
     
-    def Experiment(name, model, TrainArgs_=None, TestArgs_=None, 
+    def Experiment(name, model, useCrossValidation=True, TrainArgs_=None, TestArgs_=None, 
                    loss='categorical_crossentropy', weight_loss=None, epochs=5, steps_per_epoch=400, add_results=True):
         if (TrainArgs_ is None):
             TrainArgs_=TrainArgs
         if (TestArgs_ is None):
             TestArgs_=TestArgs
         
-        hist, results = CrossValidation(model, X_train, Y_train, TrainArgs_, TestArgs_,
+        if (useCrossValidation):
+            hist, results = CrossValidation(model, X_train, Y_train, TrainArgs_, TestArgs_,
                                         loss=loss, weight_loss=weight_loss, steps_per_epoch=steps_per_epoch, epochs=epochs)
-        # hist, results = Train(model, train_gen, val_gen, steps_per_epoch=steps_per_epoch, batch_size=1, epochs=epochs)
+        else:
+            hist, results = Train(model, train_gen, val_gen, steps_per_epoch=steps_per_epoch, batch_size=1, epochs=epochs)
         
         ShowEvolution(name, hist)
         
@@ -683,70 +704,59 @@ def main():
     
     ############################# DATA AUGMENTATION ##############################################
     def DataAugmentationTests():
-        # Experiment with the shifts
-        values = [0.01, 0.05, 0.1, 0.2]
-        for i in values:
-            model = UNetClassic()
-            Compile(model, loss='categorical_crossentropy')
-            
-            _,_,_, TrainArgs, TestArgs = GetGenerators(X_train, Y_train, X_test, Y_test, data_augmentation=True, batch_size=4,
-                                                         shift_range=i)
-            Experiment(f"Shift {i}", model, TrainArgs_=TrainArgs, steps_per_epoch=10, epochs = 2)
-            
-        print(experimentalResults)
-        PlotBars(experimentalResults, "Shifts", "Dice")
+        experiment_steps_per_epoch = 50
+        experiment_epochs = 5
         
-        experimentalResults.clear()
-        # Experiment with the rotation
-        values = [1, 5, 10, 45]
-        for i in values:
-            model = UNetClassic()
-            Compile(model, loss='categorical_crossentropy')
-            
-            _,_,_, TrainArgs, TestArgs = GetGenerators(X_train, Y_train, X_test, Y_test, data_augmentation=True, batch_size=4,
-                                                         rotation_range=i)
-            Experiment(f"Rotation {i}", model,TrainArgs_=TrainArgs, steps_per_epoch=100, epochs = 5)
-            
-        print(experimentalResults)
-        PlotBars(experimentalResults, "Rotations", "Dice")
+        model = UNetClassic()
+        Compile(model, loss='categorical_crossentropy')
+        _,_,_, NoDATrainArgs, NoDATestArgs = GetGenerators(X_train, Y_train, X_test, Y_test, data_augmentation=False, batch_size=4)
+        Experiment(f"No Data Augmentation", model, TrainArgs_=NoDATrainArgs, steps_per_epoch=experiment_steps_per_epoch, epochs = experiment_epochs)
         
-        experimentalResults.clear()
-        # Experiment with the rotation
-        values = [False, True]
-        for i in values:
-            model = UNetClassic()
-            Compile(model, loss='categorical_crossentropy')
-            
-            _,_,_, TrainArgs, TestArgs = GetGenerators(X_train, Y_train, X_test, Y_test, data_augmentation=True, batch_size=4,
-                                                         flip=i)
-            Experiment(f"Flip {i}", model, TrainArgs_=TrainArgs, steps_per_epoch=100, epochs = 5)
-            
-        print(experimentalResults)
-        PlotBars(experimentalResults, "Flip", "Dice")
+        model = UNetClassic()
+        Compile(model, loss='categorical_crossentropy')
+        Experiment(f"Data Augmentation", model, steps_per_epoch=experiment_steps_per_epoch, epochs = experiment_epochs)
         
-        experimentalResults.clear()
-        # Experiment with the rotation
-        values = [0.01, 0.05, 0.1, 0.2]
-        for i in values:
-            model = UNetClassic()
-            Compile(model, loss='categorical_crossentropy')
-            
-            _,_,_, TrainArgs, TestArgs = GetGenerators(X_train, Y_train, X_test, Y_test, data_augmentation=True, batch_size=4,
-                                                         zoom_range=i)
-            Experiment(f"Zoom {i}", model, TrainArgs_=TrainArgs, steps_per_epoch=100, epochs = 5)
-            
-        print(experimentalResults)
-        PlotBars(experimentalResults, "Zoom", "Dice")
+        PlotBars(experimentalResults, "Data Augmentation", "Dice")
         
+    ############################# PRE-TRAIN ##############################################
+    def PreTrainingTests():
+        experiment_steps_per_epoch = 100
+        experiment_epochs = 5
         
+        model = LoadModel(pretrainedUNet, 3)
+        Compile(model, loss='categorical_crossentropy')
+        Experiment(f"Pre-Trained", model, steps_per_epoch=experiment_steps_per_epoch, epochs = experiment_epochs)
         
+        model = UNetClassic()
+        Compile(model, loss='categorical_crossentropy')
+        Experiment(f"Not Pre-Trained", model, steps_per_epoch=experiment_steps_per_epoch, epochs = experiment_epochs)
         
-    # model = UNetClassic()
-    # Compile(model, loss='categorical_crossentropy')
-    # Experiment("Test", model)
+        PlotBars(experimentalResults, "Pre-trained", "Dice")
+        
     
-    DataAugmentationTests()
+    # for i in range(10):
+    #     test_imgs, labels = val_gen.__next__()
+    #     visualize(test_imgs[0], labels[0])
+    
+    # ClassPercentage(Y_train)
+    
+    # DataAugmentationTests()
+    PreTrainingTests()
+    
     return 0
+    
+    class_weights = calculateClassWeights(Y_train)
+    
+    unetv2 = UNetV3()
+    Compile(unetv2, loss='weighted_categorical', weight_loss=class_weights)
+    # Compile(unetv2, loss='categorical_crossentropy')
+    # print(unetv2.summary())
+    # PreTrain(unetv2, pretrainedUNetv2, name="UNet v2")
+    Experiment("Unet v2", unetv2, useCrossValidation=False, steps_per_epoch=50, epochs=12)
+    Test(unetv2, X_test, Y_test)
+    
+    experimentalResults.append((f'UNetv2 CC: 0.5971%', 0.5971))
+    
     
     # test_imgs, labels = train_gen.__next__()
     # print(len(test_imgs))
@@ -779,7 +789,7 @@ def main():
     
     # print(weight_loss)
     
-    # model = LoadModel(pretrainedUNetv2, 3)
+    model = LoadModel(pretrainedUNetv2, 3)
     model = UNetV2()
     # model = UNetClassic()
     
