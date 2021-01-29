@@ -47,6 +47,31 @@ def visualize(image, mask, apply=False, title=None):
     
     plt.show()
 
+#Show multiple images
+def ShowImages(images, titles):
+    nimages = len(images)
+    
+    for i in range(nimages):
+        plt.subplot(1, nimages, i+1)
+        plt.imshow(images[i],cmap='gray')
+        plt.title(titles[i])
+        plt.xticks([]),plt.yticks([])
+        
+    plt.tight_layout()
+    plt.show()
+
+def ShowComparation(image, masktrue, prediction1, prediction2, name1="Option 1", name2="Option 2"):
+    def ProcessedMask(mask):
+        mask = MaskToCategorical(mask)
+        rgb_mask = np.zeros((mask.shape[0], mask.shape[1], 3), dtype=np.uint8)
+        rgb_mask[mask==1] = [255,0,0]
+        rgb_mask[mask==2] = [0,255,0]
+        return rgb_mask
+    
+    images = [image, ProcessedMask(masktrue), ProcessedMask(prediction1), ProcessedMask(prediction2)]
+    titles = ["Original", "Real", name1, name2 ]
+    ShowImages(images, titles)
+
 #Show the evolution of a training
 def ShowEvolution(name, hist):
     loss = hist.history['loss']

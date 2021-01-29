@@ -13,6 +13,7 @@ pretrainedUNetv2 = savedmodelspath + "PretrainedUNetv2.h5"
 savedUNet = savedmodelspath + "SavedUNet.h5"
 savedUNetv2 = savedmodelspath + "SavedUNetv2.h5"
 tempUNet = savedmodelspath + "TempUNet.h5"
+stateOfTheArt = savedmodelspath + "StateOfTheArt.h5"
 
 import keras
 import os
@@ -469,6 +470,7 @@ def CrossValidation(model, train_data, train_labels, TrainArgs, ValArgs,
     
     return historials[best_network], results
 
+#Test a model and show some images
 def Test(model, X_test, Y_test):
     predicciones = model.predict(X_test, batch_size=4)
     labels = np.argmax(Y_test, axis = -1)
@@ -530,11 +532,20 @@ def PreTrain(model, pathtosave, name=""):
 
 #Load a model from memory. If n_classes is provided, the output layer is changed accordingly
 def LoadModel(pathtosave, n_classes=None):
-    model = keras.models.load_model(pathtosave)
+    model = keras.models.load_model(pathtosave, custom_objects={'mean_dice': mean_dice})
+    # model = model_from_json(open(pathtosave).read())
+    # model.load_weights(os.path.join(os.path.dirname(pathtosave), 'model_weights.h5'))
+    
     if (n_classes != None):
         model = AdjustModel(model, n_classes)
     return model
 
+def CompareModels(model1, model2, testimages, testlabels, name1="Option 1", name2="Option 2"):
+    preds1 = model1.predict(testimages, batch_size=4)
+    preds2 = model2.predict(testimages, batch_size=4)
+    
+    for i in range(len(testimages)):
+        ShowComparation(testimages[i], testlabels[i], preds1[i], preds2[i], name1, name2)
 
 def main():
     
@@ -632,7 +643,7 @@ def main():
         unet.save(savedUNet)
         Test(unet, X_test, Y_test)
     
-    ############################# UNET CLASSIC ##############################################
+    ############################# UNET V2 ##############################################
     def Unetv2Test():
         print("Complete test of U-Netv2")
         #If the model is already saved
@@ -650,9 +661,17 @@ def main():
         unetv2.save(savedUNetv2)
         Test(unetv2, X_test, Y_test)
         
-    # #Print some images
+    ############################# COMPARATIONS OF MODELS ##############################################
+    def CompareSavedModels():
+        unet = LoadModel(savedUNet)
+        unetv2 = LoadModel(savedUNetv2)
+        # CompareModels(unet, unetv2, X_test[:10], Y_test[:10], "U-Net", "U-Net v2")
+        stateoftheart = LoadModel(stateOfTheArt)
+        CompareModels(stateoftheart, unetv2, X_test[:10], Y_test[:10], "Estado del Arte", "U-Net v2")
+        
+    #Print some images
     # for i in range(20):
-    #     ShowImage(X_train[0])
+    #     visualize(X_train[i], Y_train[i])
         
     # #Extract Percentages of the classes
     # ClassPercentage(Y_train) 
@@ -671,8 +690,12 @@ def main():
     # lossFunctionsTests()
     
     #Complete tests
-    UnetClassicTest()
-    Unetv2Test()
+    # UnetClassicTest()
+    # Unetv2Test()
+    
+    CompareSavedModels()
+    
+    
 
 if __name__ == '__main__':
   main()
