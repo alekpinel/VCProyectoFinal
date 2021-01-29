@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
+#Show a image and a mask
 def visualize(image, mask, apply=False, title=None):
     mask = MaskToCategorical(mask)
     
@@ -46,7 +47,7 @@ def visualize(image, mask, apply=False, title=None):
     
     plt.show()
 
-
+#Show the evolution of a training
 def ShowEvolution(name, hist):
     loss = hist.history['loss']
     val_loss = hist.history['val_loss']
@@ -76,11 +77,13 @@ def ShowEvolution(name, hist):
     plt.title(name)
     plt.show()
 
+#Transform the mask
 def MaskToCategorical(mask):
     if (len(mask.shape) == 3 and mask.shape[2] == 3):
         mask = np.argmax(mask, axis=-1)
     return mask
 
+#Visualize a mask
 def VisualizeMask(mask, title=None):
     mask = MaskToCategorical(mask)
     

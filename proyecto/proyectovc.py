@@ -42,42 +42,18 @@ from visualization import *
 #The local GPU used to run out of memory, so we limited the memory usage:
 os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
-# Esta función pinta dos gráficas, una con la evolución
-# de la función de pérdida en el conjunto de train y
-# en el de validación, y otra con la evolución de la
-# accuracy en el conjunto de train y el de validación.
-# Es necesario pasarle como parámetro el historial del
-# entrenamiento del modelo (lo que devuelve la
-# función fit()).
-def mostrarEvolucion(name, hist):
-    loss = hist.history['loss']
-    val_loss = hist.history['val_loss']
-    plt.plot(loss)
-    plt.plot(val_loss)
-    plt.legend(['Training loss', 'Validation loss'])
-    plt.title(name)
-    plt.show()
-    
-    acc = hist.history['accuracy']
-    val_acc = hist.history['val_accuracy']
-    plt.plot(acc)
-    plt.plot(val_acc)
-    plt.legend(['Training accuracy','Validation accuracy'])
-    plt.title(name)
-    plt.show()
-
+#Transform to gray
 def ToGray(img):
     return cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
 
+#Function that load a gif
 def LoadGif(filename):
     gif = cv2.VideoCapture(filename)
     ret,frame = gif.read()
     img = frame
-    # img = Image.fromarray(frame)
-    # img = img.convert('RGB')
     return img
 
-#Function that load and image and convert it to RGB if needed
+#Function that load an image and convert it to RGB if needed
 def LoadImage(filename, color = True):
     if (color):
       img = cv2.imread(filename,cv2.IMREAD_COLOR)
@@ -129,6 +105,7 @@ def LoadData(testpercent = 0.2, target_size=(256, 256)):
     
     return X_train, Y_train, X_test, Y_test
 
+#Load the pretraining data
 def LoadPretrainingData(target_size=(256, 256)):
     trainpath = pretrainingdatapath + "training/"
     testpath = pretrainingdatapath + "test/"
@@ -204,6 +181,7 @@ def GetGenerators(X_train, Y_train, X_test, Y_test, validation_split=0.1, batch_
     
     return train_gen, val_gen, test_gen, data_generator_args, test_args
     
+# Given X and Y, create a generator with the same seed for them
 def GenerateData(X, Y, generator_args=None, subset=None, batch_size=4, seed=None):
     if (seed is None):
         seed = 1
@@ -222,7 +200,7 @@ def GenerateData(X, Y, generator_args=None, subset=None, batch_size=4, seed=None
     data_gen = zip(image_generator, masks_generator)
     return data_gen
 
-
+#To_categorical for more than one dimension
 def ToCategoricalMatrix(data):
     originalShape = data.shape
     totalFeatures = data.max() + 1
@@ -232,6 +210,7 @@ def ToCategoricalMatrix(data):
     data = categorical.reshape(originalShape + (totalFeatures,))
     return data
 
+#A mask with one value for pixel between 0-2
 def MaskMonoband(data):
     return np.argmax(data, axis=-1)
 
@@ -245,7 +224,7 @@ def ClassPercentage(masks):
             ("Bacteries", percents[2], 'green')]
     print(f"Percent of pixels of each class:\nBackground: {percents[0]}\nBlood cells: {percents[1]}\nBacteries {percents[2]}")
     
-    PlotBars(data, "Class Percentages", "Percent")
+    PlotBars(data, "Class Percentages", "Percent", dateformat=False)
 
 #UNet from a ResNet
 def UNetFromResNet(input_shape=(256, 256, 3), n_classes=3):
@@ -337,60 +316,8 @@ def UNetClassic(input_shape=(256, 256, 3), n_classes=3):
     model = Model(model_input, model_output)
     return model
 
-#Implementation of UNet with less parameters and Conv2DTranspose (not used in experiments)
-def UNetV2(input_shape=(256, 256, 3), n_classes=3):
-    #Layer of encoder: 2 convs and pooling
-    def EncoderLayer(filters, x):
-        # x = BatchNormalization()(x)
-        x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
-        x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
-        feature_layer = x
-        x = MaxPooling2D()(x)
-        return x, feature_layer
-    #Layer of decoder, upsampling, conv, concatenation and 2 convs
-    def DecoderLayer(filters, x, skip):
-        x = UpSampling2D(size=(2,2))(x)
-        # x = Conv2DTranspose(filters, (3, 3), strides=(2, 2), activation='relu', padding='same')(x)
-        x = Concatenate()([x, skip])
-        # x = BatchNormalization()(x)
-        x = Conv2DTranspose(filters, (3, 3), activation='relu', padding='same')(x)
-        x = Conv2DTranspose(filters, (3, 3), activation='relu', padding='same')(x)
-        return x
-    
-    #Input
-    x = Input(input_shape)
-    model_input = x
-    
-    #Encoder
-    x, encoder1 = EncoderLayer(32,  x)
-    x, encoder2 = EncoderLayer(64, x)
-    x, encoder3 = EncoderLayer(128, x)
-    x, encoder4 = EncoderLayer(256, x)
-    
-    #Centre
-    x = Conv2D(512, (3, 3), activation='relu', padding='same')(x)
-    x = Conv2D(512, (3, 3), activation='relu', padding='same')(x)
-    
-    #Decoder
-    x = DecoderLayer(256, x, encoder4)
-    x = DecoderLayer(128, x, encoder3)
-    x = DecoderLayer(64, x, encoder2)
-    x = DecoderLayer(32,  x, encoder1)
-    
-    #Output
-    if (n_classes == 1):
-        x = Conv2D(n_classes, (1, 1), activation='sigmoid', padding='same')(x)
-    else:
-        x = Conv2D(n_classes, (1, 1), activation='softmax', padding='same')(x)
-        
-    model_output = x
-    
-    model = Model(model_input, model_output)
-    return model
-
-
 # Added BatchNormalization and dropout into classic Unet
-def UNetV3(input_shape=(256, 256, 3), n_classes=3):
+def UNetV2(input_shape=(256, 256, 3), n_classes=3):
     #Layer of encoder: 2 convs and pooling
     def EncoderLayer(filters, x):
         x = Conv2D(filters, (3, 3), activation='relu', padding='same')(x)
@@ -476,6 +403,7 @@ def Compile(model, loss='categorical_crossentropy', weight_loss=None):
                   metrics=['accuracy', mean_dice])
     return model
 
+#Train a model with the image data generator
 def Train(model, train_gen, val_gen, steps_per_epoch=100, batch_size=1, epochs=12):
     hist = model.fit(train_gen,
                         batch_size=batch_size,
@@ -553,11 +481,7 @@ def Test(model, X_test, Y_test):
     
     print(f"Accuracy={accuracy} Dice={dice}")
     
-    for i in range(min(len(X_test), 5)):
-        # print(f"Maximos Background {np.max(predicciones[i,:,:,0].reshape((-1,)))}")
-        # print(f"Maximos Blood cells {np.max(predicciones[i,:,:,1].reshape((-1,)))}")
-        # print(f"Maximos Bacteries {np.max(predicciones[i,:,:,2].reshape((-1,)))}")
-        
+    for i in range(min(len(X_test), 5)):        
         ShowImage(predicciones[i,:,:,0], "Background")
         ShowImage(predicciones[i,:,:,1], "Blood cells")
         ShowImage(predicciones[i,:,:,2], "Bacteries")
@@ -568,6 +492,7 @@ def Test(model, X_test, Y_test):
         
     return accuracy
 
+#Change the output layer of a model
 def AdjustModel(model, n_classes):
     model_input = model.input
     
@@ -644,6 +569,7 @@ def main():
     
     ############################# DATA AUGMENTATION ##############################################
     def DataAugmentationTests():
+        print("Test of data augmentation")
         experiment_steps_per_epoch = 50
         experiment_epochs = 5
         
@@ -660,6 +586,7 @@ def main():
         
     ############################# PRE-TRAIN ##############################################
     def PreTrainingTests():
+        print("Test of pretraining")
         experiment_steps_per_epoch = 100
         experiment_epochs = 5
         
@@ -675,6 +602,7 @@ def main():
         
     ############################# LOSS FUNCTIONS ##############################################
     def lossFunctionsTests():
+        print("Test of loss functions")
         weights = calculateClassWeights(Y_train)
         print(weights)
         # Experiment with the shifts
@@ -689,7 +617,14 @@ def main():
     
     ############################# UNET CLASSIC ##############################################
     def UnetClassicTest():
-        unet = LoadModel(pretrainedUNet, 3)
+        print("Complete test of U-Net")
+        #If the model is already saved
+        # unet = LoadModel(pretrainedUNet, 3)
+        
+        unet = UNetClassic()
+        unet = PreTrain(unet, pretrainedUNet, name="UNet Classic")
+        unet = AdjustModel(unet, 3)
+        
         Compile(unet, loss='categorical_crossentropy')
         print(unet.summary())
         Experiment("Unet", unet, useCrossValidation=False, steps_per_epoch=100, epochs=30)
@@ -699,7 +634,13 @@ def main():
     
     ############################# UNET CLASSIC ##############################################
     def Unetv2Test():
-        unetv2 = LoadModel(pretrainedUNetv2, 3)
+        print("Complete test of U-Netv2")
+        #If the model is already saved
+        # unetv2 = LoadModel(pretrainedUNetv2, 3)
+        
+        unetv2 = UNetV2()
+        unetv2 = PreTrain(unetv2, pretrainedUNetv2, name="UNet v2")
+        unetv2 = AdjustModel(unetv2, 3)
         
         Compile(unetv2, loss='categorical_crossentropy')
         print(unetv2.summary())
@@ -709,138 +650,29 @@ def main():
         unetv2.save(savedUNetv2)
         Test(unetv2, X_test, Y_test)
         
+    # #Print some images
+    # for i in range(20):
+    #     ShowImage(X_train[0])
+        
     # #Extract Percentages of the classes
-    # ClassPercentage(Y_train, dateformat=False) 
+    # ClassPercentage(Y_train) 
     
     #Pretrain models
+    
     # unet = UNetClassic()
     # PreTrain(unet, pretrainedUNet, name="UNet Classic")
     
-    # unetv2 = UNetV3()
+    # unetv2 = UNetV2()
     # PreTrain(unetv2, pretrainedUNetv2, name="UNet v2")
     
-    Unetv2Test()
-    
-    # unetv2 = UNetV3()
-    # # Compile(unetv2, loss='weighted_categorical', weight_loss=class_weights)
-    # Compile(unetv2, loss='categorical_crossentropy')
-    # print(unetv2.summary())
-    # # PreTrain(unetv2, pretrainedUNetv2, name="UNet v2")
-    # Experiment("Unet v2", unetv2, useCrossValidation=False, steps_per_epoch=100, epochs=30)
-    
-    # unetv2.save(savedUNetv2)
-    
-    # Test(unetv2, X_test, Y_test)
-    
-    return 0
-    
-    # for i in range(10):
-    #     test_imgs, labels = val_gen.__next__()
-    #     visualize(test_imgs[0], labels[0])
-    
-    # ClassPercentage(Y_train)
-    
+    #Experiments
     # DataAugmentationTests()
     # PreTrainingTests()
+    # lossFunctionsTests()
     
-    # return 0
-    
-    # model = PreTrain(model, "path", name="UNet v2")
-    # model = AdjustModel(model, 3)
-    
-    class_weights = calculateClassWeights(Y_train)
-    
-    unetv2 = UNetV3()
-    # Compile(unetv2, loss='weighted_categorical', weight_loss=class_weights)
-    Compile(unetv2, loss='categorical_crossentropy')
-    print(unetv2.summary())
-    # PreTrain(unetv2, pretrainedUNetv2, name="UNet v2")
-    Experiment("Unet v2", unetv2, useCrossValidation=False, steps_per_epoch=100, epochs=30)
-    
-    unetv2.save(savedUNetv2)
-    
-    Test(unetv2, X_test, Y_test)
-    
-    experimentalResults.append((f'UNetv2 CC: 0.5971%', 0.5971))
-    
-    
-    
-    return 0
-    
-    # test_imgs, labels = train_gen.__next__()
-    # print(len(test_imgs))
-    
-    # return 0
-    
-    # for i in range(10):
-    #     test_imgs, labels = train_gen.__next__()
-    #     visualize(test_imgs[0], labels[0])
-    
-    # return 0
-    
-    # print(X_train.shape)
-    # print(Y_train.shape)
-    # print(X_test.shape)
-    # print(Y_test.shape)
-    
-    # ClassPercentage(Y_train)
-    
-    #Pretrain block
-    # unet = UNetV2()
-    # PreTrain(unet, pretrainedUNetv2, name="UNet v2")
-    # return 0
-    
-    class_weights = calculateClassWeights(Y_train)
-    class_weights = np.sqrt(class_weights)
-    # class_weights = np.array([6.0, 14.0, 78.0])
-    # class_weights = np.array([1.0, 1.0, 1.0])
-    # class_weights = np.array([10.0, 12.0, 76.0])
-    
-    # print(weight_loss)
-    
-    model = LoadModel(pretrainedUNetv2, 3)
-    model = UNetV2()
-    # model = UNetClassic()
-    
-    print(model.summary())
-    
-    # Compile(model, loss='categorical_crossentropy')
-    # Compile(model, loss='dice')
-    Compile(model, loss='weighted_categorical', weight_loss=class_weights)
-    
-    # Test(model, X_train[:1], Y_train[:1])
-    
-    steps_per_epoch = 400
-    epochs = 10
-    
-    hist, _ = Train(model, train_gen, val_gen, steps_per_epoch=steps_per_epoch, batch_size=1, epochs=epochs)
-    
-    ShowEvolution("UNet", hist)
-    
-    # model.save(tempUNet)
-    model.save(savedUNetv2)
-    
-    print(f"Class Weights: {class_weights}")
-    Test(model, X_train[:5], Y_train[:5])
-    
-    
-    
-    # unet = UNetClassic()
-    # unet.summary()
-    # Compile(unet)
-    # Train(unet, X_train, Y_train, X_test, Y_test, batch_size=1, epochs=5)
-    
-    # unet.save(savedmodelspath + 'UNet.h5')
-    
-    
-    # model = keras.models.load_model(savedmodelspath + 'UNet.h5')
-    # acc = Test(model, X_test, Y_test)
-    # print(f"Accuracy is: {acc}")
-    
-    
-    
-    
-    
+    #Complete tests
+    UnetClassicTest()
+    Unetv2Test()
 
 if __name__ == '__main__':
   main()
