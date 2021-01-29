@@ -315,6 +315,8 @@ model_history = model.fit(train_generator,
 test_imgs, labels = validation_generator.__next__()
 predictions = model.predict(test_imgs, use_multiprocessing=False)
 
+model.save("./saves/StateOfTheArt.h5")
+
 for i in range(min(len(predictions), 5)):
     show_imgs(
         [test_imgs[i], labels[i], predictions[i]],
