@@ -592,7 +592,7 @@ def PreTrain(model, pathtosave, name=""):
     
     hist = model.fit(X_train, Y_train,
                         batch_size=4,
-                        epochs=10,
+                        epochs=30,
                         verbose=1,
                         validation_data=(X_test, Y_test))
     
@@ -616,7 +616,7 @@ def main():
     X_train, Y_train, X_test, Y_test = LoadData()
     train_gen, val_gen, test_gen, TrainArgs, TestArgs = GetGenerators(
         X_train, Y_train, X_test, Y_test, data_augmentation=True, batch_size=4)
-    # ClassPercentage(Y_train, dateformat=False)
+    
     
     experimentalResults = []
     
@@ -697,16 +697,40 @@ def main():
         unet.save(savedUNet)
         Test(unet, X_test, Y_test)
     
-    unetv2 = UNetV3()
-    # Compile(unetv2, loss='weighted_categorical', weight_loss=class_weights)
-    Compile(unetv2, loss='categorical_crossentropy')
-    print(unetv2.summary())
+    ############################# UNET CLASSIC ##############################################
+    def Unetv2Test():
+        unetv2 = LoadModel(pretrainedUNetv2, 3)
+        
+        Compile(unetv2, loss='categorical_crossentropy')
+        print(unetv2.summary())
+        # PreTrain(unetv2, pretrainedUNetv2, name="UNet v2")
+        Experiment("Unet v2", unetv2, useCrossValidation=False, steps_per_epoch=100, epochs=30)
+        
+        unetv2.save(savedUNetv2)
+        Test(unetv2, X_test, Y_test)
+        
+    # #Extract Percentages of the classes
+    # ClassPercentage(Y_train, dateformat=False) 
+    
+    #Pretrain models
+    # unet = UNetClassic()
+    # PreTrain(unet, pretrainedUNet, name="UNet Classic")
+    
+    # unetv2 = UNetV3()
     # PreTrain(unetv2, pretrainedUNetv2, name="UNet v2")
-    Experiment("Unet v2", unetv2, useCrossValidation=False, steps_per_epoch=100, epochs=30)
     
-    unetv2.save(savedUNetv2)
+    Unetv2Test()
     
-    Test(unetv2, X_test, Y_test)
+    # unetv2 = UNetV3()
+    # # Compile(unetv2, loss='weighted_categorical', weight_loss=class_weights)
+    # Compile(unetv2, loss='categorical_crossentropy')
+    # print(unetv2.summary())
+    # # PreTrain(unetv2, pretrainedUNetv2, name="UNet v2")
+    # Experiment("Unet v2", unetv2, useCrossValidation=False, steps_per_epoch=100, epochs=30)
+    
+    # unetv2.save(savedUNetv2)
+    
+    # Test(unetv2, X_test, Y_test)
     
     return 0
     
