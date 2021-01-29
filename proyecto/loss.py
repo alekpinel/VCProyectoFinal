@@ -15,7 +15,7 @@ def calculateClassWeights(masks):
     Calculate a loss weight for each class inversely proportional to the
     occurences of each class
     '''    
-    count_per_class = np.sum(masks, axis=(0,1,2))          
+    count_per_class = np.sum(masks, axis=(0,1,2)) # shape(num_classes)
     return np.max(count_per_class)/(count_per_class.astype(np.float32))
 
 
