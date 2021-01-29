@@ -661,20 +661,12 @@ def main():
         unetv2.save(savedUNetv2)
         Test(unetv2, X_test, Y_test)
         
-    ############################# COMPARATIONS OF MODELS ##############################################
-    def CompareSavedModels():
-        unet = LoadModel(savedUNet)
-        unetv2 = LoadModel(savedUNetv2)
-        # CompareModels(unet, unetv2, X_test[:10], Y_test[:10], "U-Net", "U-Net v2")
-        stateoftheart = LoadModel(stateOfTheArt)
-        CompareModels(stateoftheart, unetv2, X_test[:10], Y_test[:10], "Estado del Arte", "U-Net v2")
-        
     #Print some images
-    # for i in range(20):
-    #     visualize(X_train[i], Y_train[i])
+    for i in range(20):
+        visualize(X_train[i], Y_train[i])
         
-    # #Extract Percentages of the classes
-    # ClassPercentage(Y_train) 
+    #Extract Percentages of the classes
+    ClassPercentage(Y_train) 
     
     #Pretrain models
     
@@ -690,10 +682,8 @@ def main():
     # lossFunctionsTests()
     
     #Complete tests
-    # UnetClassicTest()
-    # Unetv2Test()
-    
-    CompareSavedModels()
+    UnetClassicTest()
+    Unetv2Test()
     
     
 
