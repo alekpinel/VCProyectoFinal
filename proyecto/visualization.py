@@ -60,6 +60,7 @@ def ShowImages(images, titles):
     plt.tight_layout()
     plt.show()
 
+#Show comparation between 2 predictions
 def ShowComparation(image, masktrue, prediction1, prediction2, name1="Option 1", name2="Option 2"):
     def ProcessedMask(mask):
         mask = MaskToCategorical(mask)

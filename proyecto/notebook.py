@@ -2,7 +2,8 @@
 """
 Created on Wed Jan 27 11:46:12 2021
 
-@author: alekp
+This is the implementation of Anh Le https://www.kaggle.com/anhvle/bacteria-segmentation
+We use it as a reference of the state of the art
 """
 
 import numpy as np
@@ -22,30 +23,9 @@ IMAGE_HEIGHT = 256
 IMAGE_WIDTH = 256
 BATCH_SIZE = 1
 NUM_CLASSES = 3
-# IMG_PATH = './notebookdata/images/'
-# MASK_PATH = './notebookdata/masks/'
 
 #The local GPU used to run out of memory, so we limited the memory usage:
 os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
-
-# DATA_PATH = '../data/'
-
-# LABEL_PATH = f'{DATA_PATH}masks/'
-# ORIGINAL_IMAGES_PATH = f'{DATA_PATH}images/'
-
-# IMG_SUB_PATH = f'{IMG_PATH}images/'
-# MASK_SUB_PATH = f'{MASK_PATH}masks/'
-
-
-# def ProcessData():
-#     mask_files = os.listdir(MASK_PATH)
-#     for mf in tqdm (mask_files):
-#         mask_img = cv2.imread(os.path.join(MASK_PATH, mf), cv2.IMREAD_GRAYSCALE)
-#         mask_img = np.around(tf.keras.utils.to_categorical(mask_img, NUM_CLASSES))
-#         cv2.imwrite(os.path.join(MASK_SUB_PATH, mf), mask_img)
-        
-#         image_img = cv2.imread(os.path.join(IMG_PATH, mf), cv2.IMREAD_GRAYSCALE)
-#         cv2.imwrite(os.path.join(IMG_SUB_PATH, mf), image_img)
 
 datapath = "../data/" #Local
 
@@ -70,6 +50,8 @@ def ToCategoricalMatrix(data):
 
 #Load the data from the datapath directory and resize all the images
 def LoadData(testpercent = 0.2, target_size=(256, 256)):
+    #Always use the same seed
+    random.seed(10)
     imagespath = datapath + "images/"
     maskspath = datapath + "masks/"
     

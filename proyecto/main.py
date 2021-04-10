@@ -66,6 +66,8 @@ def LoadImage(filename, color = True):
 
 #Load the data from the datapath directory and resize all the images
 def LoadData(testpercent = 0.2, target_size=(256, 256)):
+    #Always use the same seed
+    random.seed(10)
     imagespath = datapath + "images/"
     maskspath = datapath + "masks/"
     
