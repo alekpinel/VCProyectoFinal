@@ -48,5 +48,3 @@ La estructura final de directorios debe ser esta:
 El código main.py está preparado para realizar un pre-entrenamiento y posterior entrenamiento de U-Net y U-Net v2.
 
 Si se quiere ejecutar alguno de los otros experimentos, basta con descomentar la llamada a su respectiva función en el main.
-
-Si tienen cualquier problema, puede contactar con nosotros escribiendo a alekpinel@correo.ugr.es o a angelvj@correo.ugr.es.
